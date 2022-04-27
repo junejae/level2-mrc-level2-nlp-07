@@ -15,3 +15,4 @@ python train.py \
 --wandb_run_name "robert-large standard" \
 --evaluation_strategy steps \
 --eval_steps 500 \
+--save_total_limit 5 \
