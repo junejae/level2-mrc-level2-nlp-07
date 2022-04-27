@@ -9,7 +9,10 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="klue/bert-base",
+        # default="xlm-roberta-large",
+        # default="xlnet-large-cased",
+        default="klue/roberta-large",
+        # default="albert-base-v2",
         metadata={
             "help": "Path to pretrained model or model identifier from huggingface.co/models"
         },
