@@ -26,6 +26,9 @@ class ModelArguments:
             "help": "Pretrained tokenizer name or path if not the same as model_name"
         },
     )
+    predict_file_name: Optional[str] = field(
+        default=None,
+    )
 
 
 @dataclass

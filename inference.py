@@ -247,6 +247,7 @@ def run_mrc(
             predictions=predictions,
             max_answer_length=data_args.max_answer_length,
             output_dir=training_args.output_dir,
+            prefix=model_args.predict_file_name,
         )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [
