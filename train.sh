@@ -4,15 +4,15 @@ python train.py \
 --do_eval \
 --overwrite_output_dir True \
 --fp16 True \
---per_device_train_batch_size 8 \
---per_device_eval_batch_size 8 \
---num_train_epochs 3 \
+--per_device_train_batch_size 16 \
+--per_device_eval_batch_size 16 \
+--num_train_epochs 10 \
 --weight_decay 0.01 \
 --warmup_ratio 0.1 \
---learning_rate 2e-5 \
+--learning_rate 6e-6 \
 --project_name "[MRC] baseline" \
 --entity_name growing_sesame \
---wandb_run_name "robert-large standard" \
+--wandb_run_name "robert-large batch 16 epoch 10" \
 --evaluation_strategy steps \
 --eval_steps 500 \
 --save_total_limit 5 \
