@@ -9,7 +9,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="klue/bert-base",
+        default="klue/roberta-large",
         metadata={
             "help": "Path to pretrained model or model identifier from huggingface.co/models"
         },
@@ -26,6 +26,9 @@ class ModelArguments:
             "help": "Pretrained tokenizer name or path if not the same as model_name"
         },
     )
+    predict_file_name: Optional[str] = field(
+        default=None,
+    )
 
 
 @dataclass
@@ -39,7 +42,7 @@ class DataTrainingArguments:
         metadata={"help": "The name of the dataset to use."},
     )
     overwrite_cache: bool = field(
-        default=False,
+        default=True,
         metadata={"help": "Overwrite the cached training and evaluation sets"},
     )
     preprocessing_num_workers: Optional[int] = field(
@@ -89,4 +92,20 @@ class DataTrainingArguments:
     )
     use_faiss: bool = field(
         default=False, metadata={"help": "Whether to build with faiss"}
+    )
+
+
+@dataclass
+class WandbArguments:
+    """
+    Arguments related to wandb.
+    """
+    project_name: str = field(
+        default="[MRC] baseline" ,
+    )
+    entity_name: Optional[str] = field(
+        default="growing_sesame",
+    )
+    wandb_run_name: Optional[str] = field(
+        default="robert-large standard",
     )
