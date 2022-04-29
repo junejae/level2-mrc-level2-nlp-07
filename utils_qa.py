@@ -307,7 +307,8 @@ def postprocess_qa_predictions(
                     json.dumps(scores_diff_json, indent=4, ensure_ascii=False) + "\n"
                 )
 
-    return all_predictions
+    # also return labels' start & end positions
+    return all_predictions, (features["start_positions"], features["end_positions"])
 
 
 def check_no_error(
