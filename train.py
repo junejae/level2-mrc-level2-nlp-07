@@ -338,6 +338,7 @@ def run_mrc(
             predictions=predictions,
             max_answer_length=data_args.max_answer_length,
             output_dir=training_args.output_dir,
+            is_evaluation=True, # eval task임을 명시
         )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [

@@ -14,4 +14,4 @@ def eval_loss(predictions, labels):
 
     total_loss = (start_loss + end_loss) / 2
 
-    return total_loss
+    return total_loss.item()

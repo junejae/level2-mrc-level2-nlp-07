@@ -72,7 +72,7 @@ class QuestionAnsweringTrainer(Trainer):
             metrics = {
                 'eval_exact_match': metrics['exact_match'],
                 'eval_f1': metrics['f1'],
-                'eval_loss': eval_loss(output.predictions, label_positions).item(),
+                'eval_loss': eval_loss(output.predictions, label_positions),
             }
 
             self.log(metrics)
