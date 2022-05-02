@@ -121,8 +121,8 @@ class QuestionAnsweringTrainer(Trainer):
         )
         return predictions
 
-# Another Class for Evaluating Retriever
-class QuestionAnsweringTrainerForRetriever(Trainer):
+# Another Class for Evaluating Reader with Retriever
+class QuestionAnsweringTrainerWithRetriever(Trainer):
     def __init__(self, *args, eval_examples=None, post_process_function=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.eval_examples = eval_examples

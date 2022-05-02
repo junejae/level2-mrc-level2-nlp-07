@@ -4,10 +4,10 @@ python inference.py \
 --overwrite_output_dir True \
 --predict_file_name 9980 \
 --top_k_retrieval 20 \
---dataset_name ../data/test_dataset/ \
---do_predict \
+--dataset_name ../data/train_dataset/ \
+--do_eval \
 
-# --do_eval \
-# --dataset_name ../data/train_dataset/ \
+# --do_predict \
+# --dataset_name ../data/test_dataset/ \
 # --model_name_or_path ./models/train_dataset/checkpoint-1000/ \
 # --model_name_or_path ./models/train_dataset/ \
