@@ -19,6 +19,9 @@ Question-Answering task와 관련된 'Trainer'의 subclass 코드 입니다.
 from transformers import Trainer, is_datasets_available, is_torch_tpu_available
 from transformers.trainer_utils import PredictionOutput
 
+# custom loss function added
+from custom_loss import eval_loss
+
 if is_datasets_available():
     import datasets
 
@@ -60,10 +63,17 @@ class QuestionAnsweringTrainer(Trainer):
             )
 
         if self.post_process_function is not None and self.compute_metrics is not None:
-            eval_preds = self.post_process_function(
+            eval_preds, label_positions = self.post_process_function(
                 eval_examples, eval_dataset, output.predictions, self.args
             )
             metrics = self.compute_metrics(eval_preds)
+
+            # rename & add eval loss
+            metrics = {
+                'eval_exact_match': metrics['exact_match'],
+                'eval_f1': metrics['f1'],
+                'eval_loss': eval_loss(output.predictions, label_positions),
+            }
 
             self.log(metrics)
         else:
