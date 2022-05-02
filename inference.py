@@ -21,7 +21,7 @@ from datasets import (
     load_metric,
 )
 from retrieval import SparseRetrieval
-from trainer_qa import QuestionAnsweringTrainer
+from trainer_qa import QuestionAnsweringTrainerWithRetriever
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -273,7 +273,7 @@ def run_mrc(
 
     print("init trainer...")
     # Trainer 초기화
-    trainer = QuestionAnsweringTrainer(
+    trainer = QuestionAnsweringTrainerWithRetriever(
         model=model,
         args=training_args,
         train_dataset=None,
