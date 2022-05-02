@@ -5,6 +5,7 @@ python inference.py \
 --do_predict \
 --overwrite_output_dir True \
 --predict_file_name 9980 \
+--top_k_retrieval 20 \
 
 # --model_name_or_path ./models/train_dataset/checkpoint-1000/ \
 # --model_name_or_path ./models/train_dataset/ \
