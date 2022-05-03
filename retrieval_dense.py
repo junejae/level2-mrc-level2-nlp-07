@@ -285,7 +285,7 @@ class BertEncoder(BertPreTrainedModel):
 if __name__ == "__main__":
     from datasets import DatasetDict, load_from_disk, load_metric
     
-    model_checkpoint = "klue/bert-base"
+    model_checkpoint = "klue/roberta-large"
 
     datasets = load_from_disk("../data/train_dataset")
     args = TrainingArguments(
@@ -305,8 +305,8 @@ if __name__ == "__main__":
         use_fast=True,
     )
 
-    p_encoder = BertEncoder.from_pretrained(model_checkpoint)
-    q_encoder = BertEncoder.from_pretrained(model_checkpoint)
+    p_encoder = RobertaEncoder.from_pretrained(model_checkpoint)
+    q_encoder = RobertaEncoder.from_pretrained(model_checkpoint)
 
     if torch.cuda.is_available():
         p_encoder.cuda()
@@ -316,10 +316,13 @@ if __name__ == "__main__":
     retriever = DenseRetrieval(args=args, dataset=train_dataset, num_neg=2, tokenizer=tokenizer, p_encoder=p_encoder, q_encoder=q_encoder)
     retriever.train()
 
+    test_n = 3
     quesetions = datasets['validation']['question']
-    for query in quesetions[:5]:
+    contexts = datasets['validation']['context']
+    for query, ground_truth in zip(quesetions[:test_n], contexts[:test_n]):
         results = retriever.get_relevant_doc(query=query, k=5)
-        print(f"[Search Query] {query}\n")
+        print(f"[Search Query] {query}")
+        print(f"[Ground Truth] {ground_truth}\n")
 
         indices = results.tolist()
         for i, idx in enumerate(indices):
