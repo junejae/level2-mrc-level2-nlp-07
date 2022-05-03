@@ -93,6 +93,10 @@ class DataTrainingArguments:
     use_faiss: bool = field(
         default=False, metadata={"help": "Whether to build with faiss"}
     )
+    embedding_type: str = field(
+        default="Sparse",
+        metadata={"help": "Whether to run passage retrieval using sparse embedding or dense embedding."},
+    )
     train_retrieval: bool = field(
         default=False,
         metadata={"help": "whether to train sparse embedding (prepare for retrieval)."}
