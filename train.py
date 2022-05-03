@@ -4,9 +4,12 @@ import sys
 from typing import NoReturn
 import wandb
 
+import torch
 from arguments import DataTrainingArguments, ModelArguments, WandbArguments
 from datasets import DatasetDict, load_from_disk, load_metric
 from trainer_qa import QuestionAnsweringTrainer
+from retrieval import SparseRetrieval
+from retrieval_dense import BertEncoder, RobertaEncoder, DenseRetrieval
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -78,6 +81,36 @@ def main():
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
     )
+
+    # train & save sparse embedding retriever if true
+    if data_args.train_retrieval:
+        retriever = SparseRetrieval(
+            tokenize_fn=tokenizer.tokenize
+        )
+        retriever.get_sparse_embedding()
+    
+    if data_args.train_dense_retrieval:
+        model_checkpoint = model_args.model_name_or_path
+        args = TrainingArguments(
+            output_dir="dense_retireval",
+            evaluation_strategy="epoch",
+            learning_rate=2e-5,
+            per_device_train_batch_size=2,
+            per_device_eval_batch_size=2,
+            num_train_epochs=2,
+            weight_decay=0.01
+        )
+
+        # load pre-trained model on cuda (if available)
+        p_encoder = BertEncoder.from_pretrained(model_checkpoint)
+        q_encoder = BertEncoder.from_pretrained(model_checkpoint)
+
+        if torch.cuda.is_available():
+            p_encoder.cuda()
+            q_encoder.cuda()
+        
+        retriever = DenseRetrieval(args=args, dataset=datasets['train'], num_neg=2, tokenizer=tokenizer, p_encoder=p_encoder, q_encoder=q_encoder)
+        retriever.train()
 
     print(
         type(training_args),
