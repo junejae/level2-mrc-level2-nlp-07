@@ -93,6 +93,14 @@ class DataTrainingArguments:
     use_faiss: bool = field(
         default=False, metadata={"help": "Whether to build with faiss"}
     )
+    train_retrieval: bool = field(
+        default=False,
+        metadata={"help": "whether to train sparse embedding (prepare for retrieval)."}
+    )
+    train_dense_retrieval: bool = field(
+        default=False,
+        metadata={"help": "whether to train dense embedding (prepare for retrieval)."}
+    )
 
 
 @dataclass
