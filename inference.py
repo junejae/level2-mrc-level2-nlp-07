@@ -21,7 +21,7 @@ from datasets import (
     load_metric,
 )
 from retrieval import SparseRetrieval
-from trainer_qa import QuestionAnsweringTrainer
+from trainer_qa import QuestionAnsweringTrainerWithRetriever
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -188,7 +188,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -247,6 +247,7 @@ def run_mrc(
             predictions=predictions,
             max_answer_length=data_args.max_answer_length,
             output_dir=training_args.output_dir,
+            prefix=model_args.predict_file_name,
         )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [
@@ -272,7 +273,7 @@ def run_mrc(
 
     print("init trainer...")
     # Trainer 초기화
-    trainer = QuestionAnsweringTrainer(
+    trainer = QuestionAnsweringTrainerWithRetriever(
         model=model,
         args=training_args,
         train_dataset=None,

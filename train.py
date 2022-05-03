@@ -2,10 +2,14 @@ import logging
 import os
 import sys
 from typing import NoReturn
+import wandb
 
-from arguments import DataTrainingArguments, ModelArguments
+import torch
+from arguments import DataTrainingArguments, ModelArguments, WandbArguments
 from datasets import DatasetDict, load_from_disk, load_metric
 from trainer_qa import QuestionAnsweringTrainer
+from retrieval import SparseRetrieval
+from retrieval_dense import BertEncoder, RobertaEncoder, DenseRetrieval
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -26,14 +30,16 @@ def main():
     # --help flag 를 실행시켜서 확인할 수 도 있습니다.
 
     parser = HfArgumentParser(
-        (ModelArguments, DataTrainingArguments, TrainingArguments)
+        (ModelArguments, DataTrainingArguments, TrainingArguments, WandbArguments)
     )
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    model_args, data_args, training_args, wandb_args = parser.parse_args_into_dataclasses()
     print(model_args.model_name_or_path)
 
     # [참고] argument를 manual하게 수정하고 싶은 경우에 아래와 같은 방식을 사용할 수 있습니다
     # training_args.per_device_train_batch_size = 4
     # print(training_args.per_device_train_batch_size)
+    wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
+    wandb.run.name = wandb_args.wandb_run_name
 
     print(f"model is from {model_args.model_name_or_path}")
     print(f"data is from {data_args.dataset_name}")
@@ -75,6 +81,36 @@ def main():
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
     )
+
+    # train & save sparse embedding retriever if true
+    if data_args.train_retrieval:
+        retriever = SparseRetrieval(
+            tokenize_fn=tokenizer.tokenize
+        )
+        retriever.get_sparse_embedding()
+    
+    if data_args.train_dense_retrieval:
+        model_checkpoint = model_args.model_name_or_path
+        args = TrainingArguments(
+            output_dir="dense_retireval",
+            evaluation_strategy="epoch",
+            learning_rate=2e-5,
+            per_device_train_batch_size=2,
+            per_device_eval_batch_size=2,
+            num_train_epochs=2,
+            weight_decay=0.01
+        )
+
+        # load pre-trained model on cuda (if available)
+        p_encoder = BertEncoder.from_pretrained(model_checkpoint)
+        q_encoder = BertEncoder.from_pretrained(model_checkpoint)
+
+        if torch.cuda.is_available():
+            p_encoder.cuda()
+            q_encoder.cuda()
+        
+        retriever = DenseRetrieval(args=args, dataset=datasets['train'], num_neg=2, tokenizer=tokenizer, p_encoder=p_encoder, q_encoder=q_encoder)
+        retriever.train()
 
     print(
         type(training_args),
@@ -130,7 +166,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -222,12 +258,70 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
         # 길이가 긴 context가 등장할 경우 truncate를 진행해야하므로, 해당 데이터셋을 찾을 수 있도록 mapping 가능한 값이 필요합니다.
         sample_mapping = tokenized_examples.pop("overflow_to_sample_mapping")
+        # 원래 train set에만 사용하던 position 저장코드를 살짝 수정하여 사용합니다.
+        # token의 캐릭터 단위 position를 찾을 수 있도록 offset mapping을 사용합니다.
+        # start_positions과 end_positions을 찾는데 도움을 줄 수 있습니다.
+        offset_mapping = tokenized_examples["offset_mapping"]
+
+        # 데이터셋에 "start position", "enc position" label을 부여합니다.
+        tokenized_examples["start_positions"] = []
+        tokenized_examples["end_positions"] = []
+
+        for i, offsets in enumerate(offset_mapping):
+            input_ids = tokenized_examples["input_ids"][i]
+            cls_index = input_ids.index(tokenizer.cls_token_id)  # cls index
+
+            # sequence id를 설정합니다 (to know what is the context and what is the question).
+            sequence_ids = tokenized_examples.sequence_ids(i)
+
+            # 하나의 example이 여러개의 span을 가질 수 있습니다.
+            sample_index = sample_mapping[i]
+            answers = examples[answer_column_name][sample_index]
+
+            # answer가 없을 경우 cls_index를 answer로 설정합니다(== example에서 정답이 없는 경우 존재할 수 있음).
+            if len(answers["answer_start"]) == 0:
+                tokenized_examples["start_positions"].append(cls_index)
+                tokenized_examples["end_positions"].append(cls_index)
+            else:
+                # text에서 정답의 Start/end character index
+                start_char = answers["answer_start"][0]
+                end_char = start_char + len(answers["text"][0])
+
+                # text에서 current span의 Start token index
+                token_start_index = 0
+                while sequence_ids[token_start_index] != (1 if pad_on_right else 0):
+                    token_start_index += 1
+
+                # text에서 current span의 End token index
+                token_end_index = len(input_ids) - 1
+                while sequence_ids[token_end_index] != (1 if pad_on_right else 0):
+                    token_end_index -= 1
+
+                # 정답이 span을 벗어났는지 확인합니다(정답이 없는 경우 CLS index로 label되어있음).
+                if not (
+                    offsets[token_start_index][0] <= start_char
+                    and offsets[token_end_index][1] >= end_char
+                ):
+                    tokenized_examples["start_positions"].append(cls_index)
+                    tokenized_examples["end_positions"].append(cls_index)
+                else:
+                    # token_start_index 및 token_end_index를 answer의 끝으로 이동합니다.
+                    # Note: answer가 마지막 단어인 경우 last offset을 따라갈 수 있습니다(edge case).
+                    while (
+                        token_start_index < len(offsets)
+                        and offsets[token_start_index][0] <= start_char
+                    ):
+                        token_start_index += 1
+                    tokenized_examples["start_positions"].append(token_start_index - 1)
+                    while offsets[token_end_index][1] >= end_char:
+                        token_end_index -= 1
+                    tokenized_examples["end_positions"].append(token_end_index + 1)
 
         # evaluation을 위해, prediction을 context의 substring으로 변환해야합니다.
         # corresponding example_id를 유지하고 offset mappings을 저장해야합니다.
@@ -271,12 +365,13 @@ def run_mrc(
     # Post-processing:
     def post_processing_function(examples, features, predictions, training_args):
         # Post-processing: start logits과 end logits을 original context의 정답과 match시킵니다.
-        predictions = postprocess_qa_predictions(
+        predictions, label_positions = postprocess_qa_predictions(
             examples=examples,
             features=features,
             predictions=predictions,
             max_answer_length=data_args.max_answer_length,
             output_dir=training_args.output_dir,
+            is_evaluation=True, # eval task임을 명시
         )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [
@@ -292,7 +387,7 @@ def run_mrc(
             ]
             return EvalPrediction(
                 predictions=formatted_predictions, label_ids=references
-            )
+            ), label_positions
 
     metric = load_metric("squad")
 

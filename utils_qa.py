@@ -62,6 +62,7 @@ def postprocess_qa_predictions(
     output_dir: Optional[str] = None,
     prefix: Optional[str] = None,
     is_world_process_zero: bool = True,
+    is_evaluation: bool = False,
 ):
     """
     Post-processes : qa model의 prediction 값을 후처리하는 함수
@@ -93,6 +94,8 @@ def postprocess_qa_predictions(
             dictionary에 `prefix`가 포함되어 저장됨
         is_world_process_zero (:obj:`bool`, `optional`, defaults to :obj:`True`):
             이 프로세스가 main process인지 여부(logging/save를 수행해야 하는지 여부를 결정하는 데 사용됨)
+        is_evaluation (:obj:`bool`, `optional`, defaults to :obj:`False`):
+            이 함수를 호출한 상위 task가 eval task인지 여부(데이터셋의 position index 반환 여부를 결정하는 데 사용됨)
     """
     assert (
         len(predictions) == 2
@@ -276,18 +279,18 @@ def postprocess_qa_predictions(
 
         prediction_file = os.path.join(
             output_dir,
-            "predictions.json" if prefix is None else f"predictions_{prefix}".json,
+            "predictions.json" if prefix is None else f"predictions_{prefix}.json",
         )
         nbest_file = os.path.join(
             output_dir,
             "nbest_predictions.json"
             if prefix is None
-            else f"nbest_predictions_{prefix}".json,
+            else f"nbest_predictions_{prefix}.json",
         )
         if version_2_with_negative:
             null_odds_file = os.path.join(
                 output_dir,
-                "null_odds.json" if prefix is None else f"null_odds_{prefix}".json,
+                "null_odds.json" if prefix is None else f"null_odds_{prefix}.json",
             )
 
         logger.info(f"Saving predictions to {prediction_file}.")
@@ -307,7 +310,12 @@ def postprocess_qa_predictions(
                     json.dumps(scores_diff_json, indent=4, ensure_ascii=False) + "\n"
                 )
 
-    return all_predictions
+    # also return labels' start & end positions
+    if is_evaluation:
+        return all_predictions, (features["start_positions"], features["end_positions"])
+    
+    else:
+        return all_predictions
 
 
 def check_no_error(

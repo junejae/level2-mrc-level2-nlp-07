@@ -19,6 +19,9 @@ Question-Answering task와 관련된 'Trainer'의 subclass 코드 입니다.
 from transformers import Trainer, is_datasets_available, is_torch_tpu_available
 from transformers.trainer_utils import PredictionOutput
 
+# custom loss function added
+from custom_loss import eval_loss
+
 if is_datasets_available():
     import datasets
 
@@ -33,7 +36,99 @@ class QuestionAnsweringTrainer(Trainer):
         self.eval_examples = eval_examples
         self.post_process_function = post_process_function
 
-    def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
+    def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None, isReader=False):
+        eval_dataset = self.eval_dataset if eval_dataset is None else eval_dataset
+        eval_dataloader = self.get_eval_dataloader(eval_dataset)
+        eval_examples = self.eval_examples if eval_examples is None else eval_examples
+
+        # 일시적으로 metric computation를 불가능하게 한 상태이며, 해당 코드에서는 loop 내에서 metric 계산을 수행합니다.
+        compute_metrics = self.compute_metrics
+        self.compute_metrics = None
+        try:
+            output = self.prediction_loop(
+                eval_dataloader,
+                description="Evaluation",
+                # metric이 없으면 예측값을 모으는 이유가 없으므로 아래의 코드를 따르게 됩니다.
+                # self.args.prediction_loss_only
+                prediction_loss_only=True if compute_metrics is None else None,
+                ignore_keys=ignore_keys,
+            )
+        finally:
+            self.compute_metrics = compute_metrics
+
+        if isinstance(eval_dataset, datasets.Dataset):
+            eval_dataset.set_format(
+                type=eval_dataset.format["type"],
+                columns=list(eval_dataset.features.keys()),
+            )
+
+        if self.post_process_function is not None and self.compute_metrics is not None:
+            eval_preds, label_positions = self.post_process_function(
+                eval_examples, eval_dataset, output.predictions, self.args
+            )
+            metrics = self.compute_metrics(eval_preds)
+
+            # rename add eval loss
+            metrics = {
+                'eval_exact_match': metrics['exact_match'],
+                'eval_f1': metrics['f1'],
+                'eval_loss': eval_loss(output.predictions, label_positions),
+            }
+
+            self.log(metrics)
+        else:
+            metrics = {}
+
+        if self.args.tpu_metrics_debug or self.args.debug:
+            # tpu-comment: PyTorch/XLA에 대한 Logging debug metrics (compile, execute times, ops, etc.)
+            xm.master_print(met.metrics_report())
+
+        self.control = self.callback_handler.on_evaluate(
+            self.args, self.state, self.control, metrics
+        )
+        return metrics
+
+    def predict(self, test_dataset, test_examples, ignore_keys=None):
+        test_dataloader = self.get_test_dataloader(test_dataset)
+
+        # 일시적으로 metric computation를 불가능하게 한 상태이며, 해당 코드에서는 loop 내에서 metric 계산을 수행합니다.
+        # evaluate 함수와 동일하게 구성되어있습니다
+        compute_metrics = self.compute_metrics
+        self.compute_metrics = None
+        try:
+            output = self.prediction_loop(
+                test_dataloader,
+                description="Evaluation",
+                # metric이 없으면 예측값을 모으는 이유가 없으므로 아래의 코드를 따르게 됩니다.
+                # self.args.prediction_loss_only
+                prediction_loss_only=True if compute_metrics is None else None,
+                ignore_keys=ignore_keys,
+            )
+        finally:
+            self.compute_metrics = compute_metrics
+
+        if self.post_process_function is None or self.compute_metrics is None:
+            return output
+
+        if isinstance(test_dataset, datasets.Dataset):
+            test_dataset.set_format(
+                type=test_dataset.format["type"],
+                columns=list(test_dataset.features.keys()),
+            )
+
+        predictions = self.post_process_function(
+            test_examples, test_dataset, output.predictions, self.args
+        )
+        return predictions
+
+# Another Class for Evaluating Reader with Retriever
+class QuestionAnsweringTrainerWithRetriever(Trainer):
+    def __init__(self, *args, eval_examples=None, post_process_function=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.eval_examples = eval_examples
+        self.post_process_function = post_process_function
+
+    def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None, isReader=False):
         eval_dataset = self.eval_dataset if eval_dataset is None else eval_dataset
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
         eval_examples = self.eval_examples if eval_examples is None else eval_examples
@@ -65,6 +160,12 @@ class QuestionAnsweringTrainer(Trainer):
             )
             metrics = self.compute_metrics(eval_preds)
 
+            # rename
+            metrics = {
+                'eval_exact_match': metrics['exact_match'],
+                'eval_f1': metrics['f1'],
+            }
+            
             self.log(metrics)
         else:
             metrics = {}
