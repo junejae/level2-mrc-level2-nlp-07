@@ -22,7 +22,6 @@ from datasets import (
 )
 from retrieval import SparseRetrieval
 #from dense_retrieval import *
-from trainer_mrc import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
