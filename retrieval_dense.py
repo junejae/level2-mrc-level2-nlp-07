@@ -4,18 +4,28 @@ import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 from pprint import pprint
+from typing import List, Optional, Tuple, Union
 
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import torch.nn.functional as F
+import torch.nn as nn
+
+import time
+from contextlib import contextmanager
+from datasets import Dataset, load_from_disk
 
 from transformers import (
-    AutoTokenizer,
-    BertModel, BertPreTrainedModel,
-    RobertaModel, RobertaForQuestionAnswering,
+    AutoTokenizer,AutoModel, AutoConfig,
     AdamW, get_linear_schedule_with_warmup,
     TrainingArguments,
 )
+
+@contextmanager
+def timer(name):
+    t0 = time.time()
+    yield
+    print(f"[{name}] done in {time.time() - t0:.3f} s")
 
 class DenseRetrieval:
 
@@ -188,8 +198,8 @@ class DenseRetrieval:
             print("Build P_Encoder & Q_Encoder")
             model_checkpoint = "klue/bert-base"
 
-            self.p_encoder = BertEncoder.from_pretrained(model_checkpoint)
-            self.q_encoder = BertEncoder.from_pretrained(model_checkpoint)
+            self.p_encoder = Encoder(model_checkpoint)
+            self.q_encoder = Encoder(model_checkpoint)
             if torch.cuda.is_available():
                 self.p_encoder.cuda()
                 self.q_encoder.cuda()
@@ -203,6 +213,53 @@ class DenseRetrieval:
                 pickle.dump(self.q_encoder, file)
             print("Encoder pickle saved.")
 
+    def retrieve(
+            self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1
+        ) -> Union[Tuple[List, List], pd.DataFrame]:
+
+
+            assert self.p_embedding is not None, "get_dense_embedding() 메소드를 먼저 수행해줘야합니다."
+
+            if isinstance(query_or_dataset, str):
+                doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset, k=topk)
+                print("[Search query]\n", query_or_dataset, "\n")
+
+                for i in range(topk):
+                    print(f"Top-{i+1} passage with score {doc_scores[i]:4f}")
+                    print(self.contexts[doc_indices[i]])
+
+                return (doc_scores, [self.contexts[doc_indices[i]] for i in range(topk)])
+
+            elif isinstance(query_or_dataset, Dataset):
+
+                # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
+                total = []
+                with timer("query exhaustive search"):
+                    doc_scores, doc_indices = self.get_relevant_doc_bulk(
+                        query_or_dataset["question"], k=topk
+                    )
+                for idx, example in enumerate(
+                    tqdm(query_or_dataset, desc="Sparse retrieval: ")
+                ):
+                    tmp = {
+                        # Query와 해당 id를 반환합니다.
+                        "question": example["question"],
+                        "id": example["id"],
+                        # Retrieve한 Passage의 id, context를 반환합니다.
+                        "context_id": doc_indices[idx],
+                        "context": " ".join(
+                            [self.contexts[pid] for pid in doc_indices[idx]]
+                        ),
+                    }
+                    if "context" in example.keys() and "answers" in example.keys():
+                        # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
+                        tmp["original_context"] = example["context"]
+                        tmp["answers"] = example["answers"]
+                    total.append(tmp)
+
+                cqas = pd.DataFrame(total)
+                return cqas
+            
     def get_relevant_doc(self, query, k=1, args=None, p_encoder=None, q_encoder=None):
 
         if args is None:
@@ -239,16 +296,36 @@ class DenseRetrieval:
         rank = torch.argsort(dot_prod_scores, dim=1, descending=True).squeeze()
         return rank[:k]
 
+    def get_relevant_doc_bulk(
+        self, queries: List, k: Optional[int] = 1
+    ) -> Tuple[List, List]:
 
-class RobertaEncoder(RobertaForQuestionAnswering):
+        query_vec = self.tfidfv.transform(queries)
+        assert (
+            np.sum(query_vec) != 0
+        ), "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
-    def __init__(self, config):
-        super(RobertaEncoder, self).__init__(config)
+        result = query_vec * self.p_embedding.T
+        if not isinstance(result, np.ndarray):
+            result = result.toarray()
+        doc_scores = []
+        doc_indices = []
+        for i in range(result.shape[0]):
+            sorted_result = np.argsort(result[i, :])[::-1]
+            doc_scores.append(result[i, :][sorted_result].tolist()[:k])
+            doc_indices.append(sorted_result.tolist()[:k])
+        return doc_scores, doc_indices
+    
 
-        self.roberta = RobertaModel(config)
-        self.init_weights()
-      
-      
+class Encoder(nn.Module):
+    
+    def __init__(self, model_checkpoint=None):
+        super(Encoder, self).__init__()
+
+        self.model_checkpoint = model_checkpoint
+        config = AutoConfig.from_pretrained(self.model_checkpoint)
+        self.model = AutoModel.from_pretrained(model_checkpoint, config=config)
+            
     def forward(
             self,
             input_ids, 
@@ -256,44 +333,21 @@ class RobertaEncoder(RobertaForQuestionAnswering):
             token_type_ids=None
         ): 
   
-        outputs = self.roberta(
+        outputs = self.model(
             input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids
         )
-        
+
+
         pooled_output = outputs[1]
+
         return pooled_output
 
-
-class BertEncoder(BertPreTrainedModel):
-
-    def __init__(self, config):
-        super(BertEncoder, self).__init__(config)
-
-        self.bert = BertModel(config)
-        self.init_weights()
-      
-      
-    def forward(
-            self,
-            input_ids, 
-            attention_mask=None,
-            token_type_ids=None
-        ): 
-  
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids
-        )
-        
-        pooled_output = outputs[1]
-        return pooled_output
 
 
 if __name__ == "__main__":
-    from datasets import DatasetDict, load_from_disk, load_metric
+
     
     model_checkpoint = "klue/roberta-large"
 
@@ -315,8 +369,8 @@ if __name__ == "__main__":
         use_fast=True,
     )
 
-    p_encoder = RobertaEncoder.from_pretrained(model_checkpoint)
-    q_encoder = RobertaEncoder.from_pretrained(model_checkpoint)
+    p_encoder = Encoder(model_checkpoint)
+    q_encoder = Encoder(model_checkpoint)
 
     if torch.cuda.is_available():
         p_encoder.cuda()
