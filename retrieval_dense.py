@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 from pprint import pprint
 from typing import List, Optional, Tuple, Union
-
+import json
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import torch.nn.functional as F
@@ -29,12 +29,23 @@ def timer(name):
 
 class DenseRetrieval:
 
-    def __init__(self, args, dataset, num_neg, tokenizer, p_encoder=None, q_encoder=None):
+    def __init__(self, args, dataset, num_neg, 
+                 tokenizer, p_encoder=None, q_encoder=None,
+                 data_path: Optional[str] = "../data/",
+                 context_path: Optional[str] = "wikipedia_documents.json",):
 
         '''
         학습과 추론에 사용될 여러 셋업을 마쳐봅시다.
         '''
 
+        self.data_path = data_path
+        with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
+            wiki = json.load(f)
+
+        self.contexts = list(
+            dict.fromkeys([v["text"] for v in wiki.values()])
+        )  # set 은 매번 순서가 바뀌므로
+        
         self.args = args
         self.dataset = dataset
         self.num_neg = num_neg
@@ -44,6 +55,8 @@ class DenseRetrieval:
         self.q_encoder = q_encoder
 
         self.prepare_in_batch_negative(num_neg=num_neg)
+        
+        self.p_embedding = None # get_sparse_embedding()으로 생성
 
     def prepare_in_batch_negative(self, dataset=None, num_neg=2, tokenizer=None):
 
@@ -183,14 +196,18 @@ class DenseRetrieval:
         # Pickle을 저장합니다.
         data_path = "../data/"
         p_encoder_name = f"dense_embedding_p_encoder.bin"
+        p_embedding_name = f"dense_embedding.bin"
         q_encoder_name = f"dense_embedding_q_encoder.bin"
         p_encoder_path = os.path.join(data_path, p_encoder_name)
+        p_embedding_path = os.path.join(data_path, p_embedding_name)
         q_encoder_path = os.path.join(data_path, q_encoder_name)
 
-        if os.path.isfile(p_encoder_path) and os.path.isfile(q_encoder_path):
-            print("Found P_Encoder & Q_Encoder")
+        if os.path.isfile(p_encoder_path) and os.path.isfile(q_encoder_path) and os.path.isfile(p_embedding_path):
+            print("Found P_Encoder & Q_Encoder & Dense Embedding")
             with open(p_encoder_path, "rb") as file:
                 self.p_encoder = pickle.load(file)
+            with open(p_encoder_path, "rb") as file:
+                self.p_embedding = pickle.load(file)
             with open(q_encoder_path, "rb") as file:
                 self.q_encoder = pickle.load(file)
             print("Encoder pickle load.")
@@ -205,8 +222,22 @@ class DenseRetrieval:
                 self.q_encoder.cuda()
             self.train()
             
+            # p_embedding
+            with torch.no_grad():
+                self.p_encoder.eval()
+
+                p_embs = []
+                for p in self.contexts:
+                    p = self.tokenizer(p, padding="max_length", truncation=True, return_tensors='pt').to('cuda')
+                    p_emb = self.p_encoder(**p).to('cpu').numpy()
+                    p_embs.append(p_emb)
+
+            p_embs = torch.Tensor(p_embs).squeeze()  # (num_passage, emb_dim)
+                
             with open(p_encoder_path, "wb") as file:
                 pickle.dump(self.p_encoder, file)
+            with open(p_embedding_path, "wb") as file:
+                pickle.dump(p_embs, file)
             with open(q_encoder_path, "wb") as file:
                 pickle.dump(self.q_encoder, file)
             print("Encoder pickle saved.")
