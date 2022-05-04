@@ -12,7 +12,7 @@ python retriever_test.py \
 --learning_rate 1e-5 \
 --report_to wandb \
 --project_name "[MRC] Dense" \
---entity_name growing_sesame \
+--entity_name hyunah \
 --wandb_run_name "[hyunah] bert-base dense ep-2" \
 --evaluation_strategy steps \
 --eval_steps 500 \

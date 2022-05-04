@@ -46,8 +46,8 @@ def main():
     )
     model_args, data_args, training_args, wandb_args = parser.parse_args_into_dataclasses()
 
-    wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
-    wandb.run.name = wandb_args.wandb_run_name
+    # wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
+    # wandb.run.name = wandb_args.wandb_run_name
 
     training_args.do_train = True
 
@@ -84,7 +84,7 @@ def main():
     )
     else: # "Dense"
         datasets = run_dense_retrieval(
-            tokenizer.tokenize, datasets, training_args, model_args, data_args,
+            tokenizer, datasets, training_args, model_args, data_args,
         )
 
 
@@ -145,6 +145,7 @@ def run_dense_retrieval(
     train_dataset = datasets['train']
     retriever = DenseRetrieval(args=args, dataset=train_dataset, num_neg=2, tokenizer=tokenizer)
     retriever.get_dense_embedding()
+    
     print("Done.")
 
     # print(datasets)

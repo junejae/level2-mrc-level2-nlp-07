@@ -169,9 +169,9 @@ class DenseRetrieval:
             TFIDF와 Embedding을 pickle로 저장합니다.
             만약 미리 저장된 파일이 있으면 저장된 pickle을 불러옵니다.
         """
-
+        
         # Pickle을 저장합니다.
-        data_path = "../data/train_dataset/dense_encoder"
+        data_path = "../data/"
         p_encoder_name = f"dense_embedding_p_encoder.bin"
         q_encoder_name = f"dense_embedding_q_encoder.bin"
         p_encoder_path = os.path.join(data_path, p_encoder_name)
@@ -186,11 +186,13 @@ class DenseRetrieval:
             print("Encoder pickle load.")
         else:
             print("Build P_Encoder & Q_Encoder")
-            p_encoder = RobertaEncoder.from_pretrained(model_checkpoint)
-            q_encoder = RobertaEncoder.from_pretrained(model_checkpoint)
+            model_checkpoint = "klue/bert-base"
+
+            self.p_encoder = BertEncoder.from_pretrained(model_checkpoint)
+            self.q_encoder = BertEncoder.from_pretrained(model_checkpoint)
             if torch.cuda.is_available():
-                p_encoder.cuda()
-                q_encoder.cuda()
+                self.p_encoder.cuda()
+                self.q_encoder.cuda()
             self.train()
             
             print("-- p_encoder.shape: ", self.p_encoder.shape)
