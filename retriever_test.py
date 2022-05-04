@@ -7,6 +7,7 @@ Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
 
 import logging
 import sys
+import pandas as pd
 from typing import Callable, Dict, List, NoReturn, Tuple
 import torch
 import numpy as np
@@ -99,14 +100,18 @@ def run_sparse_retrieval(
         tokenize_fn=tokenize_fn, data_path=data_path, context_path=context_path
     )
     retriever.get_sparse_embedding()
-
+    assert 1==0
     if data_args.use_faiss:
         retriever.build_faiss(num_clusters=data_args.num_clusters)
         df = retriever.retrieve_faiss(
             datasets["validation"], topk=data_args.top_k_retrieval
         )
     else:
-        df = retriever.retrieve(datasets["validation"], topk=data_args.top_k_retrieval)
+        print(data_args.top_k_retrieval)
+        tra = retriever.retrieve(datasets["train"], topk=data_args.top_k_retrieval)
+        val = retriever.retrieve(datasets["validation"], topk=data_args.top_k_retrieval)
+        df = pd.concat([tra, val])
+        df.reset_index(inplace=True, drop=True)
 
     count = 0
     for i in range(len(df)):
@@ -115,7 +120,6 @@ def run_sparse_retrieval(
 
         if ground in context:
             count += 1
-
 
     print("Accuracy: ", count / len(df))
 

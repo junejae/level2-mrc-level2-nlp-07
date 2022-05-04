@@ -105,6 +105,10 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "whether to train dense embedding (prepare for retrieval)."}
     )
+    bm25: bool = field(
+        default=False,
+        metadata={"help": "whether to use bm25 (instead of tf-idf)."}
+    )
 
 
 @dataclass
