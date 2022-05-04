@@ -1,17 +1,14 @@
-import json
-import random
+import os
+import pickle
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 from pprint import pprint
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import torch.nn.functional as F
 
-from datasets import load_dataset
 from transformers import (
     AutoTokenizer,
     BertModel, BertPreTrainedModel,
@@ -22,7 +19,7 @@ from transformers import (
 
 class DenseRetrieval:
 
-    def __init__(self, args, dataset, num_neg, tokenizer, p_encoder, q_encoder):
+    def __init__(self, args, dataset, num_neg, tokenizer, p_encoder=None, q_encoder=None):
 
         '''
         학습과 추론에 사용될 여러 셋업을 마쳐봅시다.
@@ -161,6 +158,8 @@ class DenseRetrieval:
                     torch.cuda.empty_cache()
 
                     del p_inputs, q_inputs
+        pprint(self.p_encoder)
+        pprint(self.q_encoder)
 
     def get_dense_embedding(self):
 
@@ -172,26 +171,35 @@ class DenseRetrieval:
         """
 
         # Pickle을 저장합니다.
-        pickle_name = f"dense_embedding.bin"
-        tfidfv_name = f"tfidv.bin"
-        emd_path = os.path.join(self.data_path, pickle_name)
-        tfidfv_path = os.path.join(self.data_path, tfidfv_name)
+        data_path = "../data/train_dataset/dense_encoder"
+        p_encoder_name = f"dense_embedding_p_encoder.bin"
+        q_encoder_name = f"dense_embedding_q_encoder.bin"
+        p_encoder_path = os.path.join(data_path, p_encoder_name)
+        q_encoder_path = os.path.join(data_path, q_encoder_name)
 
-        if os.path.isfile(emd_path) and os.path.isfile(tfidfv_path):
-            with open(emd_path, "rb") as file:
-                self.p_embedding = pickle.load(file)
-            with open(tfidfv_path, "rb") as file:
-                self.tfidfv = pickle.load(file)
-            print("Embedding pickle load.")
+        if os.path.isfile(p_encoder_path) and os.path.isfile(q_encoder_path):
+            print("Found P_Encoder & Q_Encoder")
+            with open(p_encoder_path, "rb") as file:
+                self.p_encoder = pickle.load(file)
+            with open(q_encoder_path, "rb") as file:
+                self.q_encoder = pickle.load(file)
+            print("Encoder pickle load.")
         else:
-            print("Build passage embedding")
-            self.p_embedding = self.tfidfv.fit_transform(self.contexts)
-            print(self.p_embedding.shape)
-            with open(emd_path, "wb") as file:
-                pickle.dump(self.p_embedding, file)
-            with open(tfidfv_path, "wb") as file:
-                pickle.dump(self.tfidfv, file)
-            print("Embedding pickle saved.")
+            print("Build P_Encoder & Q_Encoder")
+            p_encoder = RobertaEncoder.from_pretrained(model_checkpoint)
+            q_encoder = RobertaEncoder.from_pretrained(model_checkpoint)
+            if torch.cuda.is_available():
+                p_encoder.cuda()
+                q_encoder.cuda()
+            self.train()
+            
+            print("-- p_encoder.shape: ", self.p_encoder.shape)
+            print("-- q_encoder.shape: ", self.q_encoder.shape)
+            with open(p_encoder_path, "wb") as file:
+                pickle.dump(self.p_encoder, file)
+            with open(q_encoder_path, "wb") as file:
+                pickle.dump(self.q_encoder, file)
+            print("Encoder pickle saved.")
 
     def get_relevant_doc(self, query, k=1, args=None, p_encoder=None, q_encoder=None):
 
