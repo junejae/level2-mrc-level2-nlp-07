@@ -205,8 +205,6 @@ class DenseRetrieval:
                 self.q_encoder.cuda()
             self.train()
             
-            print("-- p_encoder.shape: ", self.p_encoder.shape)
-            print("-- q_encoder.shape: ", self.q_encoder.shape)
             with open(p_encoder_path, "wb") as file:
                 pickle.dump(self.p_encoder, file)
             with open(q_encoder_path, "wb") as file:
