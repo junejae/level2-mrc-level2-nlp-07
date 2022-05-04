@@ -1,4 +1,4 @@
-python train.py \
+python retriever_test.py \
 --output_dir ./models/train_dataset \
 --do_train \
 --do_eval \
@@ -12,7 +12,7 @@ python train.py \
 --learning_rate 1e-5 \
 --report_to wandb \
 --project_name "[MRC] Dense" \
---entity_name growing_sesame \
+--entity_name hyunah \
 --wandb_run_name "[hyunah] bert-base dense ep-2" \
 --evaluation_strategy steps \
 --eval_steps 500 \
@@ -21,5 +21,4 @@ python train.py \
 --model_name_or_path "klue/bert-base" \
 --train_dense_retrieval \
 --overwrite_cache \
---max_seq_length 512 \
---doc_stride 32 
+--embedding_type "Dense" 
