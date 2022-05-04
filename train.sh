@@ -1,4 +1,4 @@
-python train.py \
+python retriever_test.py \
 --output_dir ./models/train_dataset \
 # --do_train \
 --do_eval \
@@ -21,5 +21,6 @@ python train.py \
 --model_name_or_path "klue/roberta-large" \
 # --train_dense_retrieval \
 --overwrite_cache \
+--embedding_type "Dense" 
 # --max_seq_length 512 \
 # --doc_stride 32 

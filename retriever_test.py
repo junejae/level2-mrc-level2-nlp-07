@@ -9,9 +9,9 @@ import logging
 import sys
 import pandas as pd
 from typing import Callable, Dict, List, NoReturn, Tuple
-import torch
+import wandb
 import numpy as np
-from arguments import DataTrainingArguments, ModelArguments
+from arguments import DataTrainingArguments, ModelArguments, WandbArguments
 from datasets import (
     Dataset,
     DatasetDict,
@@ -22,7 +22,7 @@ from datasets import (
     load_metric,
 )
 from retrieval import SparseRetrieval
-#from dense_retrieval import *
+from retrieval_dense import *
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -43,9 +43,12 @@ def main():
     # --help flag 를 실행시켜서 확인할 수 도 있습니다.
 
     parser = HfArgumentParser(
-        (ModelArguments, DataTrainingArguments, TrainingArguments)
+        (ModelArguments, DataTrainingArguments, TrainingArguments, WandbArguments)
     )
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    model_args, data_args, training_args, wandb_args = parser.parse_args_into_dataclasses()
+
+    # wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
+    # wandb.run.name = wandb_args.wandb_run_name
 
     training_args.do_train = True
 
@@ -80,10 +83,10 @@ def main():
         datasets = run_sparse_retrieval(
             tokenizer.tokenize, datasets, training_args, data_args,
     )
-    #else: # "Dense"
-    #    datasets = run_dense_retrieval(
-    #        tokenizer.tokenize, datasets, model_args, data_args,
-    #    )
+    else: # "Dense"
+        datasets = run_dense_retrieval(
+            tokenizer, datasets, training_args, model_args, data_args,
+        )
 
 
 def run_sparse_retrieval(
@@ -123,8 +126,6 @@ def run_sparse_retrieval(
 
     print("Accuracy: ", count / len(df))
 
-"""
-###수정중###
 
 def run_dense_retrieval(
     tokenizer: AutoTokenizer,
@@ -135,42 +136,35 @@ def run_dense_retrieval(
     context_path: str = "wikipedia_documents.json",
 ) -> DatasetDict:
 
-    p_encoder = BertEncoder.from_pretrained(model_args.model_name_or_path).cuda()
-    q_encoder = BertEncoder.from_pretrained(model_args.model_name_or_path).cuda()
-    
-    model_dict = torch.load("./dense_encoder/encoder.pth")
-    p_encoder.load_state_dict(model_dict['p_encoder'])
-    q_encoder.load_state_dict(model_dict['q_encoder'])
-
-    
     args = TrainingArguments(
-    output_dir="dense_retireval",
-    evaluation_strategy="epoch",
-    learning_rate=3e-4,
-    per_device_train_batch_size=2,
-    per_device_eval_batch_size=2,
-    num_train_epochs=2,
-    weight_decay=0.01
+        output_dir="dense_retireval",
+        evaluation_strategy="epoch",
+        learning_rate=3e-4,
+        per_device_train_batch_size=2,
+        per_device_eval_batch_size=2,
+        num_train_epochs=2,
+        weight_decay=0.01
     )
-                
-    # Query에 맞는 Passage들을 Retrieval 합니다.
-    retriever = DenseRetrieval(args=args, dataset=datasets, num_neg=2, tokenizer=tokenizer, p_encoder=p_encoder, q_encoder=q_encoder)
+
+    train_dataset = datasets['train']
+    retriever = DenseRetrieval(args=args, dataset=train_dataset, num_neg=2, tokenizer=tokenizer)
     retriever.get_dense_embedding()
+    
+    print("Done.")
 
-    print(datasets)
-    df = retriever.retrieve(datasets, topk=data_args.top_k_retrieval)
+    # print(datasets)
+    # df = retriever.retrieve(datasets, topk=data_args.top_k_retrieval)
 
-    count = 0
-    for i in range(len(df)):
-        ground = df['original_context'][i]
-        context = df['context'][i]
+    # count = 0
+    # for i in range(len(df)):
+    #     ground = df['original_context'][i]
+    #     context = df['context'][i]
 
-        if ground in context:
-            count += 1
+    #     if ground in context:
+    #         count += 1
 
 
-    print("Accuracy: ", count / len(df))
-"""
+    # print("Accuracy: ", count / len(df))
 
 
 if __name__ == "__main__":
