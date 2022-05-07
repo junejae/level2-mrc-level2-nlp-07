@@ -138,7 +138,7 @@ def run_mrc(
 ) -> NoReturn:
 
     # Extra code for different datasets
-    if model_args.is_using_ex_dataset:
+    if data_args.is_using_ex_dataset:
         datasets["train"] = datasets_extra["train"]
         datasets["validation"] = datasets_extra["dev"]
 
