@@ -112,7 +112,7 @@ class DataTrainingArguments:
         default="v1.0" ,
     )
     is_using_ex_dataset: bool = field(
-        default=True,
+        default=False,
     )
 
 
