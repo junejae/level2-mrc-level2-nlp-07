@@ -338,18 +338,11 @@ class DenseRetrieval:
                 query_vec.append(q_emb)
 
         query_vec = torch.Tensor(query_vec).squeeze()  # (num_passage, emb_dim)
-
-        #result = query_vec * self.p_embedding.T
-        #result = query_vec.matmul(self.p_embedding.T).numpy()
-        
         result = torch.matmul(query_vec, torch.transpose(self.p_embedding, 0, 1))
-        print(result.shape)
         
-        #if not isinstance(result, np.ndarray):
-        #    result = result.toarray()
+
         doc_indices = []
         for i in range(result.shape[0]):
-            #sorted_result = np.argsort(result[i, :])[::-1]
             rank = torch.argsort(result[i, :], descending=True).squeeze()
             #doc_scores.append(result[i, :][sorted_result].tolist()[:k])
             doc_indices.append(rank.tolist()[:k])
