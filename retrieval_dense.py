@@ -10,7 +10,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 import torch.nn.functional as F
 import torch.nn as nn
-
+import wandb
 import time
 from contextlib import contextmanager
 from datasets import Dataset, load_from_disk
@@ -105,8 +105,11 @@ class DenseRetrieval:
         )
         self.passage_dataloader = DataLoader(passage_dataset, batch_size=self.args.per_device_train_batch_size)
 
-    def train(self, args=None):
+    def train(self, wandb_args, args=None):
 
+        wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
+        wandb.run.name = wandb_args.wandb_run_name
+        
         if args is None:
             args = self.args
         batch_size = args.per_device_train_batch_size
@@ -184,7 +187,7 @@ class DenseRetrieval:
         pprint(self.p_encoder)
         pprint(self.q_encoder)
 
-    def get_dense_embedding(self):
+    def get_dense_embedding(self, wandb_args):
 
         """
         Summary:
@@ -206,7 +209,7 @@ class DenseRetrieval:
             print("Found P_Encoder & Q_Encoder & Dense Embedding")
             with open(p_encoder_path, "rb") as file:
                 self.p_encoder = pickle.load(file)
-            with open(p_encoder_path, "rb") as file:
+            with open(p_embedding_path, "rb") as file:
                 self.p_embedding = pickle.load(file)
             with open(q_encoder_path, "rb") as file:
                 self.q_encoder = pickle.load(file)
@@ -220,7 +223,7 @@ class DenseRetrieval:
             if torch.cuda.is_available():
                 self.p_encoder.cuda()
                 self.q_encoder.cuda()
-            self.train()
+            self.train(wandb_args)
             
             # p_embedding
             with torch.no_grad():
@@ -233,7 +236,8 @@ class DenseRetrieval:
                     p_embs.append(p_emb)
 
             p_embs = torch.Tensor(p_embs).squeeze()  # (num_passage, emb_dim)
-                
+            self.p_embedding = p_embs
+            
             with open(p_encoder_path, "wb") as file:
                 pickle.dump(self.p_encoder, file)
             with open(p_embedding_path, "wb") as file:
@@ -243,54 +247,43 @@ class DenseRetrieval:
             print("Encoder pickle saved.")
 
     def retrieve(
-            self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1
+            self, dataset, topk: Optional[int] = 1
         ) -> Union[Tuple[List, List], pd.DataFrame]:
 
 
             assert self.p_embedding is not None, "get_dense_embedding() 메소드를 먼저 수행해줘야합니다."
 
-            if isinstance(query_or_dataset, str):
-                doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset, k=topk)
-                print("[Search query]\n", query_or_dataset, "\n")
+            # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
+            total = []
+            with timer("query exhaustive search"):
+                doc_indices = self.get_relevant_doc_bulk(
+                    dataset["question"], k=topk
+                )
+            for idx, example in enumerate(
+                tqdm(dataset, desc="Sparse retrieval: ")
+            ):
+                tmp = {
+                    # Query와 해당 id를 반환합니다.
+                    "question": example["question"],
+                    "id": example["id"],
+                    # Retrieve한 Passage의 id, context를 반환합니다.
+                    "context_id": doc_indices[idx],
+                    "context": " ".join(
+                        [self.contexts[pid] for pid in doc_indices[idx]]
+                    ),
+                }
+                if "context" in example.keys() and "answers" in example.keys():
+                    # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
+                    tmp["original_context"] = example["context"]
+                    tmp["answers"] = example["answers"]
+                total.append(tmp)
 
-                for i in range(topk):
-                    print(f"Top-{i+1} passage with score {doc_scores[i]:4f}")
-                    print(self.contexts[doc_indices[i]])
-
-                return (doc_scores, [self.contexts[doc_indices[i]] for i in range(topk)])
-
-            elif isinstance(query_or_dataset, Dataset):
-
-                # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
-                total = []
-                with timer("query exhaustive search"):
-                    doc_scores, doc_indices = self.get_relevant_doc_bulk(
-                        query_or_dataset["question"], k=topk
-                    )
-                for idx, example in enumerate(
-                    tqdm(query_or_dataset, desc="Sparse retrieval: ")
-                ):
-                    tmp = {
-                        # Query와 해당 id를 반환합니다.
-                        "question": example["question"],
-                        "id": example["id"],
-                        # Retrieve한 Passage의 id, context를 반환합니다.
-                        "context_id": doc_indices[idx],
-                        "context": " ".join(
-                            [self.contexts[pid] for pid in doc_indices[idx]]
-                        ),
-                    }
-                    if "context" in example.keys() and "answers" in example.keys():
-                        # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
-                        tmp["original_context"] = example["context"]
-                        tmp["answers"] = example["answers"]
-                    total.append(tmp)
-
-                cqas = pd.DataFrame(total)
-                return cqas
+            cqas = pd.DataFrame(total)
+            return cqas
             
     def get_relevant_doc(self, query, k=1, args=None, p_encoder=None, q_encoder=None):
 
+        pprint("in relevant")
         if args is None:
             args = self.args
 
@@ -326,24 +319,41 @@ class DenseRetrieval:
         return rank[:k]
 
     def get_relevant_doc_bulk(
-        self, queries: List, k: Optional[int] = 1
+        self, queries: List, k: Optional[int] = 1, args=None, p_encoder=None, q_encoder=None
     ) -> Tuple[List, List]:
 
-        query_vec = self.tfidfv.transform(queries)
-        assert (
-            np.sum(query_vec) != 0
-        ), "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
+        if args is None:
+            args = self.args
 
-        result = query_vec * self.p_embedding.T
-        if not isinstance(result, np.ndarray):
-            result = result.toarray()
-        doc_scores = []
+        if q_encoder is None:
+            q_encoder = self.q_encoder
+        
+        # p_embedding
+        with torch.no_grad():
+            self.q_encoder.eval()
+            query_vec = []
+            for q in queries:
+                q = self.tokenizer(q, padding="max_length", truncation=True, return_tensors='pt').to('cuda')
+                q_emb = self.q_encoder(**q).to('cpu').numpy()
+                query_vec.append(q_emb)
+
+        query_vec = torch.Tensor(query_vec).squeeze()  # (num_passage, emb_dim)
+
+        #result = query_vec * self.p_embedding.T
+        #result = query_vec.matmul(self.p_embedding.T).numpy()
+        
+        result = torch.matmul(query_vec, torch.transpose(self.p_embedding, 0, 1))
+        print(result.shape)
+        
+        #if not isinstance(result, np.ndarray):
+        #    result = result.toarray()
         doc_indices = []
         for i in range(result.shape[0]):
-            sorted_result = np.argsort(result[i, :])[::-1]
-            doc_scores.append(result[i, :][sorted_result].tolist()[:k])
-            doc_indices.append(sorted_result.tolist()[:k])
-        return doc_scores, doc_indices
+            #sorted_result = np.argsort(result[i, :])[::-1]
+            rank = torch.argsort(result[i, :], descending=True).squeeze()
+            #doc_scores.append(result[i, :][sorted_result].tolist()[:k])
+            doc_indices.append(rank.tolist()[:k])
+        return doc_indices
     
 
 class Encoder(nn.Module):

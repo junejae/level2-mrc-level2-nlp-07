@@ -84,8 +84,8 @@ def main():
     )
     else: # "Dense"
         datasets = run_dense_retrieval(
-            tokenizer, datasets, training_args, model_args, data_args,
-        )
+            tokenizer, datasets, training_args, data_args, wandb_args
+    )
 
 
 def run_sparse_retrieval(
@@ -128,6 +128,7 @@ def run_dense_retrieval(
     datasets: DatasetDict,
     model_args: ModelArguments,
     data_args: DataTrainingArguments,
+    wandb_args: WandbArguments,
     data_path: str = "../data",
     context_path: str = "wikipedia_documents.json",
 ) -> DatasetDict:
@@ -135,32 +136,35 @@ def run_dense_retrieval(
     args = TrainingArguments(
         output_dir="dense_retireval",
         evaluation_strategy="epoch",
-        learning_rate=3e-4,
-        per_device_train_batch_size=2,
-        per_device_eval_batch_size=2,
-        num_train_epochs=2,
-        weight_decay=0.01
+        learning_rate=2e-4,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        num_train_epochs=10,
+        weight_decay=0.01,
+        fp16=True
     )
 
     train_dataset = datasets['train']
-    retriever = DenseRetrieval(args=args, dataset=train_dataset, num_neg=2, tokenizer=tokenizer)
-    retriever.get_dense_embedding()
+    
+    retriever = DenseRetrieval(args=args, dataset=train_dataset, num_neg=2, tokenizer=tokenizer, data_path=data_path, context_path=context_path)
+    retriever.get_dense_embedding(wandb_args)
     
     print("Done.")
 
     # print(datasets)
-    # df = retriever.retrieve(datasets, topk=data_args.top_k_retrieval)
-
-    # count = 0
-    # for i in range(len(df)):
-    #     ground = df['original_context'][i]
-    #     context = df['context'][i]
-
-    #     if ground in context:
-    #         count += 1
+    df = retriever.retrieve(train_dataset, topk=data_args.top_k_retrieval)
 
 
-    # print("Accuracy: ", count / len(df))
+    count = 0
+    for i in range(len(df)):
+        ground = df['original_context'][i]
+        context = df['context'][i]
+
+        if ground in context:
+            count += 1
+
+
+    print("Accuracy: ", count / len(df))
 
 
 if __name__ == "__main__":
