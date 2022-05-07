@@ -121,3 +121,18 @@ class WandbArguments:
     wandb_run_name: Optional[str] = field(
         default="robert-large standard",
     )
+
+@dataclass
+class SesameArguments:
+    """
+    Arguments related to our team's various experiments.
+    """
+    other_dataset_name: str = field(
+        default="KETI-AIR/korquad" ,
+    )
+    other_dataset_ver: str = field(
+        default="v1.0" ,
+    )
+    is_using_ex_dataset: bool = field(
+        default=True,
+    )

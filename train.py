@@ -5,8 +5,8 @@ from typing import NoReturn
 import wandb
 
 import torch
-from arguments import DataTrainingArguments, ModelArguments, WandbArguments
-from datasets import DatasetDict, load_from_disk, load_metric
+from arguments import DataTrainingArguments, ModelArguments, WandbArguments, SesameArguments
+from datasets import DatasetDict, load_from_disk, load_metric, load_dataset
 from trainer_qa import QuestionAnsweringTrainer
 from retrieval import SparseRetrieval
 from retrieval_dense import BertEncoder, RobertaEncoder, DenseRetrieval
@@ -30,9 +30,9 @@ def main():
     # --help flag 를 실행시켜서 확인할 수 도 있습니다.
 
     parser = HfArgumentParser(
-        (ModelArguments, DataTrainingArguments, TrainingArguments, WandbArguments)
+        (ModelArguments, DataTrainingArguments, TrainingArguments, WandbArguments, SesameArguments)
     )
-    model_args, data_args, training_args, wandb_args = parser.parse_args_into_dataclasses()
+    model_args, data_args, training_args, wandb_args, sesame_args = parser.parse_args_into_dataclasses()
     print(model_args.model_name_or_path)
 
     # [참고] argument를 manual하게 수정하고 싶은 경우에 아래와 같은 방식을 사용할 수 있습니다
@@ -58,7 +58,9 @@ def main():
     set_seed(training_args.seed)
 
     datasets = load_from_disk(data_args.dataset_name)
+    datasets_extra = load_dataset(sesame_args.other_dataset_name, sesame_args.other_dataset_ver)
     print(datasets)
+    print(datasets_extra)
 
     # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
     # argument로 원하는 모델 이름을 설정하면 옵션을 바꿀 수 있습니다.
@@ -122,17 +124,24 @@ def main():
 
     # do_train mrc model 혹은 do_eval mrc model
     if training_args.do_train or training_args.do_eval:
-        run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
+        run_mrc(data_args, training_args, model_args, sesame_args, datasets, datasets_extra, tokenizer, model)
 
 
 def run_mrc(
     data_args: DataTrainingArguments,
     training_args: TrainingArguments,
     model_args: ModelArguments,
+    sesame_args: SesameArguments,
     datasets: DatasetDict,
+    datasets_extra: DatasetDict,
     tokenizer,
     model,
 ) -> NoReturn:
+
+    # Extra code for different datasets
+    if sesame_args.is_using_ex_dataset:
+        datasets["train"] = datasets_extra["train"]
+        datasets["validation"] = datasets_extra["dev"]
 
     # dataset을 전처리합니다.
     # training과 evaluation에서 사용되는 전처리는 아주 조금 다른 형태를 가집니다.
