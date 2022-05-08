@@ -32,6 +32,7 @@ from transformers import (
     set_seed,
 )
 from utils_qa import check_no_error, postprocess_qa_predictions
+from bm25 import bm25_func
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,8 @@ def run_sparse_retrieval(
         df = retriever.retrieve_faiss(
             datasets["validation"], topk=data_args.top_k_retrieval
         )
+    elif data_args.bm25:
+        df = bm25_func(datasets["validation"], topk=data_args.top_k_retrieval)
     else:
         df = retriever.retrieve(datasets["validation"], topk=data_args.top_k_retrieval)
 

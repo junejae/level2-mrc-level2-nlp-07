@@ -9,7 +9,7 @@ from arguments import DataTrainingArguments, ModelArguments, WandbArguments
 from datasets import DatasetDict, load_from_disk, load_metric
 from trainer_qa import QuestionAnsweringTrainer
 from retrieval import SparseRetrieval
-from retrieval_dense import BertEncoder, RobertaEncoder, DenseRetrieval
+from retrieval_dense import Encoder, DenseRetrieval
 from transformers import (
     AutoConfig,
     AutoModelForQuestionAnswering,
@@ -102,8 +102,8 @@ def main():
         )
 
         # load pre-trained model on cuda (if available)
-        p_encoder = BertEncoder.from_pretrained(model_checkpoint)
-        q_encoder = BertEncoder.from_pretrained(model_checkpoint)
+        p_encoder = Encoder.from_pretrained(model_checkpoint)
+        q_encoder = Encoder.from_pretrained(model_checkpoint)
 
         if torch.cuda.is_available():
             p_encoder.cuda()

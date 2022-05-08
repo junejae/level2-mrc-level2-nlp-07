@@ -1,37 +1,44 @@
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from scipy import sparse
+import pandas as pd
+from tqdm import tqdm
+from typing import Optional
+from rank_bm25 import BM25Okapi, BM25L, BM25Plus
+import json
+from datasets import Dataset
 
 
-class BM25(object):
-    def __init__(self, b=0.75, k1=1.6):
-        self.vectorizer = TfidfVectorizer(norm=None, smooth_idf=False)
-        self.b = b
-        self.k1 = k1
+def bm25_func(datasets: Dataset, topk: Optional[int] = 1):
+    path = "../data/wikipedia_documents.json"
+    with open(path, "r", encoding="utf-8") as f:
+            wiki = json.load(f)
+    contexts = list(
+        dict.fromkeys([v["text"] for v in wiki.values()])
+    )
+    print(f"Lengths of unique contexts : {len(contexts)}")
+    tokenized_context = [doc.split(" ") for doc in contexts]
+    bm25 = BM25Plus(tokenized_context)
 
+    pred = []
+    for i in tqdm(range(len(datasets['question']))):
+        query = datasets['question'][i].split(" ")
+        top_k = bm25.get_top_n(query, contexts, n=topk)
+        pred.append(top_k)
 
-    def fit(self, X):
-        """ Fit IDF to documents X """
-        self.vectorizer.fit(X)
-        y = super(TfidfVectorizer, self.vectorizer).transform(X)
-        self.avdl = y.sum(1).mean()
-        return y
+    total = []
+    for idx, example in enumerate(
+        tqdm(datasets, desc="BM25 retrieval: ")
+    ):
+        tmp = {
+            # Query와 해당 id를 반환합니다.
+            "question": example["question"],
+            "id": example["id"],
+            # Retrieve한 Passage의 context를 반환합니다.
+            "context": " ".join(pred[idx]),
+        }
+        if "context" in example.keys() and "answers" in example.keys():
+            # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
+            tmp["original_context"] = example["context"]
+            tmp["answers"] = example["answers"]
+        total.append(tmp)
 
-    def transform(self, q, X):
-        """ Calculate BM25 between query q and documents X """
-        b, k1, avdl = self.b, self.k1, self.avdl
-
-        # apply CountVectorizer
-        X = super(TfidfVectorizer, self.vectorizer).transform(X)
-        len_X = X.sum(1).A1
-        q, = super(TfidfVectorizer, self.vectorizer).transform([q])
-        assert sparse.isspmatrix_csr(q)
-
-        # convert to csc for better column slicing
-        X = X.tocsc()[:, q.indices]
-        denom = X + (k1 * (1 - b + b * len_X / avdl))[:, None]
-        # idf(t) = log [ n / df(t) ] + 1 in sklearn, so it need to be coneverted
-        # to idf(t) = log [ n / df(t) ] with minus 1
-        idf = self.vectorizer._tfidf.idf_[None, q.indices] - 1.
-        numer = X.multiply(np.broadcast_to(idf, X.shape)) * (k1 + 1)                                                          
-        return (numer / denom).sum(1).A1
+    cqas = pd.DataFrame(total)
+    return cqas

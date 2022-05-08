@@ -1,6 +1,6 @@
-python retriever_test.py \
+python train.py \
 --output_dir ./models/train_dataset \
-# --do_train \
+--do_train \
 --do_eval \
 --overwrite_output_dir True \
 --fp16 True \
@@ -13,14 +13,11 @@ python retriever_test.py \
 --report_to wandb \
 --project_name "[MRC] hp-tuning" \
 --entity_name growing_sesame \
---wandb_run_name "[lkm] roberta-large top_k 100" \
+--wandb_run_name "[lkm] roberta-large max512 doc32" \
 --evaluation_strategy steps \
 --eval_steps 500 \
 --save_total_limit 5 \
---train_retrieval \
 --model_name_or_path "klue/roberta-large" \
-# --train_dense_retrieval \
 --overwrite_cache \
---embedding_type "Dense" 
-# --max_seq_length 512 \
-# --doc_stride 32 
+--max_seq_length 512 \
+--doc_stride 32 
