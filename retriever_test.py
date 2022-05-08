@@ -7,6 +7,7 @@ Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
 
 import logging
 import sys
+import pandas as pd
 from typing import Callable, Dict, List, NoReturn, Tuple
 import wandb
 import numpy as np
@@ -18,6 +19,7 @@ from datasets import (
     Sequence,
     Value,
     load_from_disk,
+    concatenate_datasets,
     load_metric,
 )
 from retrieval import SparseRetrieval
@@ -32,6 +34,7 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
+from bm25 import bm25_func
 from utils_qa import check_no_error, postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)
@@ -103,13 +106,23 @@ def run_sparse_retrieval(
     )
     retriever.get_sparse_embedding()
 
+    total = concatenate_datasets(
+        [
+            datasets["train"].flatten_indices(),
+            datasets["validation"].flatten_indices(),
+        ]
+    )
+    # total = datasets["validation"]
+
     if data_args.use_faiss:
         retriever.build_faiss(num_clusters=data_args.num_clusters)
         df = retriever.retrieve_faiss(
-            datasets["validation"], topk=data_args.top_k_retrieval
+            total, topk=data_args.top_k_retrieval
         )
+    elif data_args.bm25:
+        df = bm25_func(total, topk=data_args.top_k_retrieval)
     else:
-        df = retriever.retrieve(datasets["validation"], topk=data_args.top_k_retrieval)
+        df = retriever.retrieve(total, topk=data_args.top_k_retrieval)
 
     count = 0
     for i in range(len(df)):
@@ -118,7 +131,6 @@ def run_sparse_retrieval(
 
         if ground in context:
             count += 1
-
 
     print("Accuracy: ", count / len(df))
 

@@ -114,6 +114,10 @@ class DataTrainingArguments:
     is_using_ex_dataset: bool = field(
         default=False,
     )
+    bm25: bool = field(
+        default=False,
+        metadata={"help": "whether to use bm25 (instead of tf-idf)."}
+    )
 
 
 @dataclass

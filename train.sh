@@ -9,16 +9,18 @@ python train.py \
 --num_train_epochs 2 \
 --weight_decay 0.01 \
 --warmup_ratio 0.1 \
---learning_rate 1e-5 \
+--learning_rate 3e-5 \
 --report_to wandb \
---project_name "[MRC] Dense" \
---entity_name hyunah \
---wandb_run_name "[hyunah] bert-base" \
+--project_name "[MRC] hp-tuning" \
+--entity_name growing_sesame \
+--wandb_run_name "[lkm] roberta-large max512 doc32" \
 --evaluation_strategy steps \
 --eval_steps 500 \
 --save_total_limit 5 \
---model_name_or_path "klue/bert-base" \
+--model_name_or_path "klue/roberta-large" \
 --overwrite_cache \
+--max_seq_length 512 \
+--doc_stride 32 
 
 # --embedding_type "Dense" 
 # --train_dense_retrieval \
