@@ -93,6 +93,10 @@ class DataTrainingArguments:
     use_faiss: bool = field(
         default=False, metadata={"help": "Whether to build with faiss"}
     )
+    embedding_type: str = field(
+        default="Sparse",
+        metadata={"help": "Whether to run passage retrieval using sparse embedding or dense embedding."},
+    )
     train_retrieval: bool = field(
         default=False,
         metadata={"help": "whether to train sparse embedding (prepare for retrieval)."}
@@ -100,6 +104,19 @@ class DataTrainingArguments:
     train_dense_retrieval: bool = field(
         default=False,
         metadata={"help": "whether to train dense embedding (prepare for retrieval)."}
+    )
+    other_dataset_name: str = field(
+        default="KETI-AIR/korquad" ,
+    )
+    other_dataset_ver: str = field(
+        default="v1.0" ,
+    )
+    is_using_ex_dataset: bool = field(
+        default=False,
+    )
+    bm25: bool = field(
+        default=False,
+        metadata={"help": "whether to use bm25 (instead of tf-idf)."}
     )
 
 
