@@ -6,7 +6,7 @@ import wandb
 
 import torch
 from arguments import DataTrainingArguments, ModelArguments, WandbArguments
-from datasets import DatasetDict, load_from_disk, load_metric
+from datasets import DatasetDict, load_from_disk, load_metric, load_dataset
 from trainer_qa import QuestionAnsweringTrainer
 from retrieval import SparseRetrieval
 from retrieval_dense import Encoder, DenseRetrieval
@@ -58,7 +58,9 @@ def main():
     set_seed(training_args.seed)
 
     datasets = load_from_disk(data_args.dataset_name)
+    datasets_extra = load_dataset(data_args.other_dataset_name, data_args.other_dataset_ver)
     print(datasets)
+    print(datasets_extra)
 
     # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
     # argument로 원하는 모델 이름을 설정하면 옵션을 바꿀 수 있습니다.
@@ -122,7 +124,7 @@ def main():
 
     # do_train mrc model 혹은 do_eval mrc model
     if training_args.do_train or training_args.do_eval:
-        run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
+        run_mrc(data_args, training_args, model_args, datasets, datasets_extra, tokenizer, model)
 
 
 def run_mrc(
@@ -130,9 +132,15 @@ def run_mrc(
     training_args: TrainingArguments,
     model_args: ModelArguments,
     datasets: DatasetDict,
+    datasets_extra: DatasetDict,
     tokenizer,
     model,
 ) -> NoReturn:
+
+    # Extra code for different datasets
+    if data_args.is_using_ex_dataset:
+        datasets["train"] = datasets_extra["train"]
+        datasets["validation"] = datasets_extra["dev"]
 
     # dataset을 전처리합니다.
     # training과 evaluation에서 사용되는 전처리는 아주 조금 다른 형태를 가집니다.

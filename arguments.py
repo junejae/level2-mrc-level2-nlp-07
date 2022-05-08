@@ -105,6 +105,15 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "whether to train dense embedding (prepare for retrieval)."}
     )
+    other_dataset_name: str = field(
+        default="KETI-AIR/korquad" ,
+    )
+    other_dataset_ver: str = field(
+        default="v1.0" ,
+    )
+    is_using_ex_dataset: bool = field(
+        default=False,
+    )
     bm25: bool = field(
         default=False,
         metadata={"help": "whether to use bm25 (instead of tf-idf)."}
