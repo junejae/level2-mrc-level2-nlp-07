@@ -6,7 +6,7 @@ python inference.py \
 --top_k_retrieval 200 \
 --dataset_name ../data/test_dataset/ \
 --bm25 True \
---do_predict \
+--do_predict
 
 
 # --use_faiss True \
