@@ -120,6 +120,10 @@ class DataTrainingArguments:
     is_elastic: bool = field(
         default=True,
     )
+    bm25: bool = field(
+        default=False,
+        metadata={"help": "whether to use bm25 (instead of tf-idf)."}
+    )
 
 
 @dataclass
