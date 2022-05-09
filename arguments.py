@@ -114,6 +114,9 @@ class DataTrainingArguments:
     is_using_ex_dataset: bool = field(
         default=False,
     )
+    is_multiple_training: bool = field(
+        default=False,
+    )
 
 
 @dataclass
