@@ -22,6 +22,8 @@ python train.py \
 --max_seq_length 512 \
 --doc_stride 32 
 
+
+# --model_name_or_path "klue/bert-base" \
 # --embedding_type "Dense" 
 # --train_dense_retrieval \
 # --train_retrieval \
