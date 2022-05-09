@@ -9,15 +9,18 @@ python train.py \
 --num_train_epochs 2 \
 --weight_decay 0.01 \
 --warmup_ratio 0.1 \
---learning_rate 1e-5 \
+--learning_rate 3e-5 \
 --report_to wandb \
---project_name "[MRC] Dataset" \
---wandb_run_name "[junejae] roberta-large after korquad" \
+--project_name "[MRC] hp-tuning" \
+--entity_name growing_sesame \
+--wandb_run_name "[lkm] roberta-large max512 doc32" \
 --evaluation_strategy steps \
 --eval_steps 500 \
---save_total_limit 10 \
+--save_total_limit 5 \
+--model_name_or_path "klue/roberta-large" \
 --overwrite_cache \
---model_name_or_path ./models/train_dataset/ \
+--max_seq_length 512 \
+--doc_stride 32 
 
 
 # --model_name_or_path "klue/bert-base" \

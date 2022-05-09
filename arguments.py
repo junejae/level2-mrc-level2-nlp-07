@@ -107,15 +107,23 @@ class DataTrainingArguments:
     )
     other_dataset_name: str = field(
         default="KETI-AIR/korquad" ,
+        metadata={"help": "state the name of the dataset to be trained"}
     )
     other_dataset_ver: str = field(
         default="v1.0" ,
+        metadata={"help": "state the version of the dataset to be trained"}
     )
     is_using_ex_dataset: bool = field(
         default=False,
+        metadata={"help": "whether to train different datasets."}
     )
     is_multiple_training: bool = field(
         default=False,
+        metadata={"help": "whether to train after train"}
+    )
+    bm25: bool = field(
+        default=False,
+        metadata={"help": "whether to use bm25 (instead of tf-idf)."}
     )
 
 
