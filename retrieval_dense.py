@@ -14,7 +14,7 @@ import wandb
 import time
 from contextlib import contextmanager
 from datasets import Dataset, load_from_disk
-
+from sklearn.model_selection import train_test_split
 from transformers import (
     AutoTokenizer,AutoModel, AutoConfig,
     AdamW, get_linear_schedule_with_warmup,
@@ -32,6 +32,7 @@ class DenseRetrieval:
     def __init__(self, args, dataset, num_neg, 
                  tokenizer, p_encoder=None, q_encoder=None,
                  data_path: Optional[str] = "../data/",
+                 data_args=None,
                  context_path: Optional[str] = "wikipedia_documents.json",):
 
         '''
@@ -97,13 +98,12 @@ class DenseRetrieval:
             q_seqs['input_ids'], q_seqs['attention_mask'], q_seqs['token_type_ids']
         )
 
-        self.train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=self.args.per_device_train_batch_size)
-
-        valid_seqs = tokenizer(dataset['context'], padding="max_length", truncation=True, return_tensors='pt')
-        passage_dataset = TensorDataset(
-            valid_seqs['input_ids'], valid_seqs['attention_mask'], valid_seqs['token_type_ids']
-        )
-        self.passage_dataloader = DataLoader(passage_dataset, batch_size=self.args.per_device_train_batch_size)
+        print(len(train_dataset))
+        train_dataset, valid_dataset =  train_test_split(train_dataset, test_size=0.2, random_state=42)
+        print(len(train_dataset))
+        print(len(valid_dataset))
+        self.train_dataloader = DataLoader(train_dataset, shuffle=False, batch_size=self.args.per_device_train_batch_size, drop_last=True)
+        self.valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=self.args.per_device_eval_batch_size, drop_last=True)
 
     def train(self, wandb_args, args=None):
 
@@ -172,6 +172,10 @@ class DenseRetrieval:
                     loss = F.nll_loss(sim_scores, targets)
                     tepoch.set_postfix(loss=f'{str(loss.item())}')
 
+                    wandb.log({
+                        "Train/Loss": loss
+                        })
+            
                     loss.backward()
                     optimizer.step()
                     scheduler.step()
@@ -184,10 +188,64 @@ class DenseRetrieval:
                     torch.cuda.empty_cache()
 
                     del p_inputs, q_inputs
+
+            """
+            validation
+            """
+            with tqdm(self.valid_dataloader, unit="batch") as tepoch:
+                for batch in tepoch:
+
+                    self.p_encoder.eval()
+                    self.q_encoder.eval()
+            
+                    targets = torch.zeros(batch_size).long() # positive example은 전부 첫 번째에 위치하므로
+                    targets = targets.to(args.device)
+
+                    p_inputs = {
+                        'input_ids': batch[0].view(batch_size * (self.num_neg + 1), -1).to(args.device),
+                        'attention_mask': batch[1].view(batch_size * (self.num_neg + 1), -1).to(args.device),
+                        'token_type_ids': batch[2].view(batch_size * (self.num_neg + 1), -1).to(args.device)
+                    }
+            
+                    q_inputs = {
+                        'input_ids': batch[3].to(args.device),
+                        'attention_mask': batch[4].to(args.device),
+                        'token_type_ids': batch[5].to(args.device)
+                    }
+            
+                    p_outputs = self.p_encoder(**p_inputs)  # (batch_size*(num_neg+1), emb_dim)
+                    q_outputs = self.q_encoder(**q_inputs)  # (batch_size*, emb_dim)
+
+                    # Calculate similarity score & loss
+                    p_outputs = p_outputs.view(batch_size, self.num_neg + 1, -1)
+                    q_outputs = q_outputs.view(batch_size, 1, -1)
+
+
+                    sim_scores = torch.bmm(q_outputs, torch.transpose(p_outputs, 1, 2)).squeeze()  #(batch_size, num_neg + 1)
+                    sim_scores = sim_scores.view(batch_size, -1)
+                    sim_scores = F.log_softmax(sim_scores, dim=1)
+
+                    loss = F.nll_loss(sim_scores, targets)
+                    tepoch.set_postfix(loss=f'{str(loss.item())}')
+
+                    wandb.log({
+                        "Valid/Loss": loss
+                        })
+            
+
+                    self.p_encoder.zero_grad()
+                    self.q_encoder.zero_grad()
+
+                    torch.cuda.empty_cache()
+
+                    del p_inputs, q_inputs
+                    
+                
+                
         pprint(self.p_encoder)
         pprint(self.q_encoder)
 
-    def get_dense_embedding(self, wandb_args):
+    def get_dense_embedding(self, wandb_args, args):
 
         """
         Summary:
