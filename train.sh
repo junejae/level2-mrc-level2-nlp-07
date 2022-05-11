@@ -13,7 +13,11 @@ python train.py \
 --report_to wandb \
 --project_name "[MRC] hp-tuning" \
 --entity_name growing_sesame \
+<<<<<<< HEAD
 --wandb_run_name "[lkm] roberta-large max384 doc128" \
+=======
+--wandb_run_name "[lkm] robert-large test" \
+>>>>>>> 7d7bbfedf83445a6917eef9ab702e2032fab4af5
 --evaluation_strategy steps \
 --eval_steps 500 \
 --save_total_limit 5 \
