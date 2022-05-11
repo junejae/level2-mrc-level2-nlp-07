@@ -142,6 +142,11 @@ def run_mrc(
         datasets["train"] = datasets_extra["train"]
         datasets["validation"] = datasets_extra["dev"]
 
+    # test code must be deleted
+    if data_args.is_using_augmented_dataset:
+        temp = load_from_disk(data_args.augmented_dataset_dir)
+        datasets["train"] = temp
+
     # dataset을 전처리합니다.
     # training과 evaluation에서 사용되는 전처리는 아주 조금 다른 형태를 가집니다.
     if training_args.do_train:
@@ -200,7 +205,7 @@ def run_mrc(
             answers = examples[answer_column_name][sample_index]
 
             # answer가 없을 경우 cls_index를 answer로 설정합니다(== example에서 정답이 없는 경우 존재할 수 있음).
-            if len(answers["answer_start"]) == 0:
+            if len(answers["answer_start"]) == 0 or len(answers["text"][0]) == 0 : # modified for no_answer
                 tokenized_examples["start_positions"].append(cls_index)
                 tokenized_examples["end_positions"].append(cls_index)
             else:

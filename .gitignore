@@ -19,3 +19,6 @@
 **/.ipynb_checkpoints/
 **/outputs/
 **/runs/
+**/hg_dataset/
+**/train_with_no_answer/
+**/DataAug/

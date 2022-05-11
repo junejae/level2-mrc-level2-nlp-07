@@ -125,6 +125,14 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "whether to use bm25 (instead of tf-idf)."}
     )
+    is_using_augmented_dataset: bool = field(
+        default=False,
+        metadata={"help": "whether to train with augmented dataset"}
+    )
+    augmented_dataset_dir: str = field(
+        default="DataAug/train_with_no_answer",
+        metadata={"help": "declare directory of the augmented dataset"}
+    )
 
 
 @dataclass
