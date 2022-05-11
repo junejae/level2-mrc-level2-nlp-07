@@ -91,28 +91,6 @@ def main():
         )
         retriever.get_sparse_embedding()
     
-    if data_args.train_dense_retrieval:
-        model_checkpoint = model_args.model_name_or_path
-        args = TrainingArguments(
-            output_dir="dense_retireval",
-            evaluation_strategy="epoch",
-            learning_rate=2e-5,
-            per_device_train_batch_size=2,
-            per_device_eval_batch_size=2,
-            num_train_epochs=2,
-            weight_decay=0.01
-        )
-
-        # load pre-trained model on cuda (if available)
-        p_encoder = Encoder.from_pretrained(model_checkpoint)
-        q_encoder = Encoder.from_pretrained(model_checkpoint)
-
-        if torch.cuda.is_available():
-            p_encoder.cuda()
-            q_encoder.cuda()
-        
-        retriever = DenseRetrieval(args=args, dataset=datasets['train'], num_neg=2, tokenizer=tokenizer, p_encoder=p_encoder, q_encoder=q_encoder)
-        retriever.train()
 
     print(
         type(training_args),

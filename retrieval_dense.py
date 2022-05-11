@@ -18,8 +18,11 @@ from sklearn.model_selection import train_test_split
 from transformers import (
     AutoTokenizer,AutoModel, AutoConfig,
     AdamW, get_linear_schedule_with_warmup,
+    HfArgumentParser,
     TrainingArguments,
+    set_seed,
 )
+from arguments import *
 
 @contextmanager
 def timer(name):
@@ -32,7 +35,6 @@ class DenseRetrieval:
     def __init__(self, args, dataset, num_neg, 
                  tokenizer, p_encoder=None, q_encoder=None,
                  data_path: Optional[str] = "../data/",
-                 data_args=None,
                  context_path: Optional[str] = "wikipedia_documents.json",):
 
         '''
@@ -105,10 +107,7 @@ class DenseRetrieval:
         self.train_dataloader = DataLoader(train_dataset, shuffle=False, batch_size=self.args.per_device_train_batch_size, drop_last=True)
         self.valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=self.args.per_device_eval_batch_size, drop_last=True)
 
-    def train(self, wandb_args, args=None):
-
-        wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
-        wandb.run.name = wandb_args.wandb_run_name
+    def train(self, args=None):
         
         if args is None:
             args = self.args
@@ -239,13 +238,8 @@ class DenseRetrieval:
                     torch.cuda.empty_cache()
 
                     del p_inputs, q_inputs
-                    
-                
-                
-        pprint(self.p_encoder)
-        pprint(self.q_encoder)
 
-    def get_dense_embedding(self, wandb_args, args):
+    def get_dense_embedding(self, model_args=None):
 
         """
         Summary:
@@ -274,14 +268,14 @@ class DenseRetrieval:
             print("Encoder pickle load.")
         else:
             print("Build P_Encoder & Q_Encoder")
-            model_checkpoint = "klue/bert-base"
+            model_checkpoint = model_args.model_name_or_path
 
             self.p_encoder = Encoder(model_checkpoint)
             self.q_encoder = Encoder(model_checkpoint)
             if torch.cuda.is_available():
                 self.p_encoder.cuda()
                 self.q_encoder.cuda()
-            self.train(wandb_args)
+            self.train()
             
             # p_embedding
             with torch.no_grad():
@@ -307,7 +301,6 @@ class DenseRetrieval:
     def retrieve(
             self, dataset, topk: Optional[int] = 1
         ) -> Union[Tuple[List, List], pd.DataFrame]:
-
 
             assert self.p_embedding is not None, "get_dense_embedding() 메소드를 먼저 수행해줘야합니다."
 
@@ -437,48 +430,78 @@ class Encoder(nn.Module):
 
 
 if __name__ == "__main__":
-
-    
-    model_checkpoint = "klue/roberta-large"
-
-    datasets = load_from_disk("../data/train_dataset")
-    args = TrainingArguments(
-        output_dir="dense_retireval",
-        evaluation_strategy="epoch",
-        learning_rate=3e-4,
-        per_device_train_batch_size=2,
-        per_device_eval_batch_size=2,
-        num_train_epochs=2,
-        weight_decay=0.01
+    parser = HfArgumentParser(
+        (ModelArguments, DataTrainingArguments, TrainingArguments, WandbArguments)
     )
+    model_args, data_args, training_args, wandb_args = parser.parse_args_into_dataclasses()
+    training_args.do_train = True
+    set_seed(training_args.seed)
+
+    wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
+    wandb.run.name = wandb_args.wandb_run_name
+
+    datasets = load_from_disk(data_args.dataset_name)
+    train_dataset = datasets['train']
     tokenizer = AutoTokenizer.from_pretrained(
-        model_checkpoint,
-        # 'use_fast' argument를 True로 설정할 경우 rust로 구현된 tokenizer를 사용할 수 있습니다.
-        # False로 설정할 경우 python으로 구현된 tokenizer를 사용할 수 있으며,
-        # rust version이 비교적 속도가 빠릅니다.
+        model_args.tokenizer_name
+        if model_args.tokenizer_name
+        else model_args.model_name_or_path,
         use_fast=True,
     )
+    retriever = DenseRetrieval(
+        args=training_args, 
+        dataset=train_dataset, 
+        num_neg=2, 
+        tokenizer=tokenizer
+    )
+    retriever.get_dense_embedding(model_args=model_args)
+    
+    def retrieval_here(
+            self, dataset, topk: Optional[int] = 1
+        ) -> Union[Tuple[List, List], pd.DataFrame]:
 
-    p_encoder = Encoder(model_checkpoint)
-    q_encoder = Encoder(model_checkpoint)
+        assert self.p_embedding is not None, "get_dense_embedding() 메소드를 먼저 수행해줘야합니다."
 
-    if torch.cuda.is_available():
-        p_encoder.cuda()
-        q_encoder.cuda()
+        total = []
+        for example in dataset:
+            results = retriever.get_relevant_doc(query=example["question"], k=topk)
+            indices = results.tolist()
 
-    train_dataset = datasets['train']
-    retriever = DenseRetrieval(args=args, dataset=train_dataset, num_neg=2, tokenizer=tokenizer, p_encoder=p_encoder, q_encoder=q_encoder)
-    retriever.train()
+            total.append({
+                # Query와 해당 id를 반환합니다.
+                "question": example["question"],
+                "id": example["id"],
+                # Retrieve한 Passage의 id, context를 반환합니다.
+                "context_id": indices[indices],
+                "context": " ".join(
+                    [self.contexts[pid] for pid in indices[indices]]
+                ),
+                "original_context": example["context"],
+                "answers": example["answers"]
+            })
+    
+    df = retrieval_here(datasets['validation'], topk=data_args.top_k_retrieval)
 
-    test_n = 3
-    quesetions = datasets['validation']['question']
-    contexts = datasets['validation']['context']
-    for query, ground_truth in zip(quesetions[:test_n], contexts[:test_n]):
-        results = retriever.get_relevant_doc(query=query, k=5)
-        print(f"[Search Query] {query}")
-        print(f"[Ground Truth] {ground_truth}\n")
+    count = 0
+    for i in range(len(df)):
+        ground = df['original_context'][i]
+        context = df['context'][i]
 
-        indices = results.tolist()
-        for i, idx in enumerate(indices):
-            print(f"Top-{i + 1}th Passage (Index {idx})")
-            pprint(retriever.dataset['context'][idx])
+        if ground in context:
+            count += 1
+
+
+    print("Accuracy: ", count / len(df))
+
+    # test_n = 3
+    # quesetions = datasets['validation']['question']
+    # contexts = datasets['validation']['context']
+    # for query, ground_truth in zip(quesetions[:test_n], contexts[:test_n]):
+    #     results = retriever.get_relevant_doc(query=query, k=5)
+    #     print(f"[Search Query] {query}")
+    #     print(f"[Ground Truth] {ground_truth}\n")
+
+    #     indices = results.tolist()
+    #     for i, idx in enumerate(indices):
+    #         print(f"Top-{i + 1}th Passage (Index {idx})")
+    #         pprint(retriever.dataset['context'][idx])
