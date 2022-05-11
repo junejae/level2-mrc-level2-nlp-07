@@ -133,6 +133,10 @@ class DataTrainingArguments:
         default="DataAug/train_with_no_answer",
         metadata={"help": "declare directory of the augmented dataset"}
     )
+    elastic: bool = field(
+        default=False,
+        metadata={"help": "whether to use elastic (instead of tf-idf)."}
+    )
 
 
 @dataclass

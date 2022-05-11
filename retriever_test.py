@@ -35,6 +35,7 @@ from transformers import (
     set_seed,
 )
 from bm25 import bm25_func
+from elasticsearch_retriever import elastic_func
 from utils_qa import check_no_error, postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)
@@ -121,9 +122,12 @@ def run_sparse_retrieval(
         )
     elif data_args.bm25:
         df = bm25_func(total, topk=data_args.top_k_retrieval)
+    elif data_args.elastic:
+        df = elastic_func(total, topk=data_args.top_k_retrieval)
     else:
         df = retriever.retrieve(total, topk=data_args.top_k_retrieval)
 
+    print('--------------------yes-------------------------')
     count = 0
     for i in range(len(df)):
         ground = df['original_context'][i]
