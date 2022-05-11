@@ -125,6 +125,10 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "whether to use bm25 (instead of tf-idf)."}
     )
+    elastic: bool = field(
+        default=False,
+        metadata={"help": "whether to use elastic (instead of tf-idf)."}
+    )
 
 
 @dataclass

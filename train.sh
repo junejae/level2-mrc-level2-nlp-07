@@ -13,14 +13,14 @@ python train.py \
 --report_to wandb \
 --project_name "[MRC] hp-tuning" \
 --entity_name growing_sesame \
---wandb_run_name "[lkm] roberta-large max512 doc32" \
+--wandb_run_name "[lkm] roberta-large max384 doc128" \
 --evaluation_strategy steps \
 --eval_steps 500 \
 --save_total_limit 5 \
 --model_name_or_path "klue/roberta-large" \
 --overwrite_cache \
---max_seq_length 512 \
---doc_stride 32 
+--max_seq_length 384 \
+--doc_stride 128 
 
 
 # --model_name_or_path "klue/bert-base" \
