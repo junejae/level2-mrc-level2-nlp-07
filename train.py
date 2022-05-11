@@ -153,6 +153,15 @@ def run_mrc(
     context_column_name = "context" if "context" in column_names else column_names[1]
     answer_column_name = "answers" if "answers" in column_names else column_names[2]
 
+    def attach_title_at_context(dataset):
+        import pandas as pd
+        from datasets import Dataset
+        import pyarrow as pa
+
+        dataset = pd.DataFrame(dataset.to_dict())[:]
+        dataset['context'] = dataset['context']+' @'+dataset['title']+'@'
+        return Dataset(pa.Table.from_pandas(dataset))
+
     # Padding에 대한 옵션을 설정합니다.
     # (question|context) 혹은 (context|question)로 세팅 가능합니다.
     pad_on_right = tokenizer.padding_side == "right"
@@ -244,6 +253,7 @@ def run_mrc(
         if "train" not in datasets:
             raise ValueError("--do_train requires a train dataset")
         train_dataset = datasets["train"]
+        # train_dataset = attach_title_at_context(train_dataset)
 
         # dataset에서 train feature를 생성합니다.
         train_dataset = train_dataset.map(
@@ -353,6 +363,7 @@ def run_mrc(
 
     if training_args.do_eval:
         eval_dataset = datasets["validation"]
+        # eval_dataset = attach_title_at_context(eval_dataset)
 
         # Validation Feature 생성
         eval_dataset = eval_dataset.map(
