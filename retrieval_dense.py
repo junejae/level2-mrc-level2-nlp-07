@@ -35,7 +35,6 @@ class DenseRetrieval:
     def __init__(self, args, dataset, num_neg, 
                  tokenizer, p_encoder=None, q_encoder=None,
                  data_path: Optional[str] = "../data/",
-                 data_args=None,
                  context_path: Optional[str] = "wikipedia_documents.json",):
 
         '''
@@ -57,8 +56,6 @@ class DenseRetrieval:
         self.tokenizer = tokenizer
         self.p_encoder = p_encoder
         self.q_encoder = q_encoder
-
-        self.prepare_in_batch_negative(num_neg=num_neg)
         
         self.p_embedding = None # get_sparse_embedding()으로 생성
 
@@ -107,6 +104,9 @@ class DenseRetrieval:
         self.valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=self.args.per_device_eval_batch_size, drop_last=True)
 
     def train(self, args=None):
+
+        self.prepare_in_batch_negative(num_neg=self.num_neg)
+
         
         if args is None:
             args = self.args
