@@ -158,7 +158,7 @@ def run_mrc(
     context_column_name = "context" if "context" in column_names else column_names[1]
     answer_column_name = "answers" if "answers" in column_names else column_names[2]
 
-    def attach_title_at_context(dataset):
+    def attach_title_at_context_back(dataset):
         import pandas as pd
         from datasets import Dataset
         import pyarrow as pa
@@ -166,6 +166,39 @@ def run_mrc(
         dataset = pd.DataFrame(dataset.to_dict())[:]
         dataset['context'] = dataset['context']+' @'+dataset['title']+'@'
         return Dataset(pa.Table.from_pandas(dataset))
+    
+    def attach_title_at_context_front(dataset):
+        import pandas as pd
+        from datasets import Dataset
+        import pyarrow as pa
+
+        dataset = pd.DataFrame(dataset.to_dict())[:]
+        dataset['context'] = '@'+dataset['title']+'@ '+ dataset['context']
+        
+        titles = dataset['title'].to_list()
+        answers = dataset['answers'].to_list()
+        new_answers = []
+
+        for i in range(len(titles)):
+            temp = answers[i]
+
+            temp['answer_start'][0] = temp['answer_start'][0] + 3 + len(titles[i])
+
+            new_answers.append(temp)
+        
+        dataset['answers'] = new_answers
+
+        return Dataset(pa.Table.from_pandas(dataset))
+
+    if data_args.is_using_title_attatchment:
+        if data_args.title_position == 'front':
+            datasets["train"] = attach_title_at_context_front(datasets["train"])
+            datasets["validation"] = attach_title_at_context_front(datasets["validation"])
+        elif data_args.title_position == 'back':
+            datasets["train"] = attach_title_at_context_back(datasets["train"])
+            datasets["validation"] = attach_title_at_context_back(datasets["validation"])
+        else:
+            print('title_attatchment is called but not excecuted, check if it is not intended')
 
     # Padding에 대한 옵션을 설정합니다.
     # (question|context) 혹은 (context|question)로 세팅 가능합니다.
