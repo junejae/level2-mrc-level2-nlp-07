@@ -36,7 +36,7 @@ def elastic_func(datasets: Dataset, topk: Optional[int] = 1):
     }
     }
 
-    path = "/opt/ml/input/data/wikipedia_documents.json"
+    path = "/opt/ml/input/data/wikipedia_documents_no_dup.json"
     with open(path, "r") as f:
         wiki = json.load(f)
 

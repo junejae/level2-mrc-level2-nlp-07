@@ -29,6 +29,10 @@ class ModelArguments:
     predict_file_name: Optional[str] = field(
         default=None,
     )
+    custom_model: bool = field(
+        default=False,
+        metadata={"help": "whether to use custom model."}
+    )
 
 
 @dataclass
