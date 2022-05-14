@@ -18,8 +18,11 @@ from sklearn.model_selection import train_test_split
 from transformers import (
     AutoTokenizer,AutoModel, AutoConfig,
     AdamW, get_linear_schedule_with_warmup,
+    HfArgumentParser,
     TrainingArguments,
+    set_seed,
 )
+from arguments import *
 
 @contextmanager
 def timer(name):
@@ -32,7 +35,6 @@ class DenseRetrieval:
     def __init__(self, args, dataset, num_neg, 
                  tokenizer, p_encoder=None, q_encoder=None,
                  data_path: Optional[str] = "../data/",
-                 data_args=None,
                  context_path: Optional[str] = "wikipedia_documents.json",):
 
         '''
@@ -54,8 +56,6 @@ class DenseRetrieval:
         self.tokenizer = tokenizer
         self.p_encoder = p_encoder
         self.q_encoder = q_encoder
-
-        self.prepare_in_batch_negative(num_neg=num_neg)
         
         self.p_embedding = None # get_sparse_embedding()으로 생성
 
@@ -98,17 +98,15 @@ class DenseRetrieval:
             q_seqs['input_ids'], q_seqs['attention_mask'], q_seqs['token_type_ids']
         )
 
-        print(len(train_dataset))
         train_dataset, valid_dataset =  train_test_split(train_dataset, test_size=0.2, random_state=42)
-        print(len(train_dataset))
-        print(len(valid_dataset))
+
         self.train_dataloader = DataLoader(train_dataset, shuffle=False, batch_size=self.args.per_device_train_batch_size, drop_last=True)
         self.valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=self.args.per_device_eval_batch_size, drop_last=True)
 
-    def train(self, wandb_args, args=None):
+    def train(self, args=None):
 
-        wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
-        wandb.run.name = wandb_args.wandb_run_name
+        self.prepare_in_batch_negative(num_neg=self.num_neg)
+
         
         if args is None:
             args = self.args
@@ -239,13 +237,9 @@ class DenseRetrieval:
                     torch.cuda.empty_cache()
 
                     del p_inputs, q_inputs
-                    
-                
-                
-        pprint(self.p_encoder)
-        pprint(self.q_encoder)
 
-    def get_dense_embedding(self, wandb_args, args):
+
+    def get_dense_embedding(self, model_args=None):
 
         """
         Summary:
@@ -274,14 +268,14 @@ class DenseRetrieval:
             print("Encoder pickle load.")
         else:
             print("Build P_Encoder & Q_Encoder")
-            model_checkpoint = "klue/bert-base"
+            model_checkpoint = model_args.model_name_or_path
 
             self.p_encoder = Encoder(model_checkpoint)
             self.q_encoder = Encoder(model_checkpoint)
             if torch.cuda.is_available():
                 self.p_encoder.cuda()
                 self.q_encoder.cuda()
-            self.train(wandb_args)
+            self.train()
             
             # p_embedding
             with torch.no_grad():
@@ -290,8 +284,17 @@ class DenseRetrieval:
                 p_embs = []
                 for p in self.contexts:
                     p = self.tokenizer(p, padding="max_length", truncation=True, return_tensors='pt').to('cuda')
-                    p_emb = self.p_encoder(**p).to('cpu').numpy()
+                    
+                    p_inputs = {
+                        'input_ids': p['input_ids'].to(args.device),
+                        'attention_mask': p['attention_mask'].to(args.device)
+                    }
+                                        
+                    p_emb = self.p_encoder(**p_inputs).to('cpu').numpy()
                     p_embs.append(p_emb)
+                    torch.cuda.empty_cache()
+                    
+                    del p
 
             p_embs = torch.Tensor(p_embs).squeeze()  # (num_passage, emb_dim)
             self.p_embedding = p_embs
@@ -307,7 +310,6 @@ class DenseRetrieval:
     def retrieve(
             self, dataset, topk: Optional[int] = 1
         ) -> Union[Tuple[List, List], pd.DataFrame]:
-
 
             assert self.p_embedding is not None, "get_dense_embedding() 메소드를 먼저 수행해줘야합니다."
 
@@ -391,8 +393,14 @@ class DenseRetrieval:
             self.q_encoder.eval()
             query_vec = []
             for q in queries:
-                q = self.tokenizer(q, padding="max_length", truncation=True, return_tensors='pt').to('cuda')
-                q_emb = self.q_encoder(**q).to('cpu').numpy()
+                q = self.tokenizer(q, padding="max_length", truncation=True, return_tensors='pt').to('cuda')\
+                
+                q_inputs = {
+                    'input_ids': q['input_ids'].to(args.device),
+                    'attention_mask': q['attention_mask'].to(args.device)
+                }
+                                    
+                q_emb = self.q_encoder(**q_inputs).to('cpu').numpy()
                 query_vec.append(q_emb)
 
         query_vec = torch.Tensor(query_vec).squeeze()  # (num_passage, emb_dim)

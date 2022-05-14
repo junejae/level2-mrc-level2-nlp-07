@@ -91,8 +91,13 @@ def main():
     )
     else: # "Dense"
         datasets = run_dense_retrieval(
-            tokenizer, datasets, datasets_extra, training_args, data_args, wandb_args
-    )
+            tokenizer=tokenizer, 
+            datasets=datasets, 
+            datasets_extra=datasets_extra, 
+            model_args=model_args,
+            training_args=training_args, 
+            data_args=data_args, 
+        )
 
 
 def run_sparse_retrieval(
@@ -147,22 +152,13 @@ def run_dense_retrieval(
     datasets: DatasetDict,
     datasets_extra: DatasetDict,
     model_args: ModelArguments,
+    training_args: TrainingArguments,
     data_args: DataTrainingArguments,
     wandb_args: WandbArguments,
     data_path: str = "../data",
     context_path: str = "wikipedia_documents.json",
 ) -> DatasetDict:
-
-    args = TrainingArguments(
-        output_dir="dense_retireval",
-        evaluation_strategy="epoch",
-        learning_rate=3e-4,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=4,
-        num_train_epochs=30,
-        weight_decay=0.001,
-        fp16=True
-    )
+    
 
     dataset = datasets['train'].remove_columns([col for col in datasets['train'].column_names if (col not in ['question', 'context'])])  # only keep the 'text' column
     datasets_extra = datasets_extra['train'].remove_columns([col for col in datasets_extra['train'].column_names if (col not in ['question', 'context'])])
@@ -170,8 +166,15 @@ def run_dense_retrieval(
 
     train_dataset = concatenate_datasets([dataset, datasets_extra])
     
-    retriever = DenseRetrieval(args=args, dataset=train_dataset, num_neg=2, tokenizer=tokenizer, data_path=data_path, context_path=context_path, data_args=data_args)
-    retriever.get_dense_embedding(wandb_args, args)
+    retriever = DenseRetrieval(
+        args=training_args, 
+        dataset=train_dataset, 
+        num_neg=2, 
+        tokenizer=tokenizer, 
+        data_path=data_path, 
+        context_path=context_path
+    )
+    retriever.get_dense_embedding(model_args=model_args)
     
     print("Done.")
 
