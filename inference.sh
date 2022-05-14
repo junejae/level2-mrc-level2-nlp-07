@@ -25,3 +25,13 @@ python inference.py \
 # --dataset_name ../data/train_dataset/ \
 # --model_name_or_path ./models/train_dataset/checkpoint-1000/ \
 # --model_name_or_path ./models/train_dataset/ \
+
+# python inference.py \
+# --output_dir ./outputs/test_dataset/ \
+# --model_name_or_path ./models/train_dataset/ \
+# --dataset_name ../data/test_dataset/ \
+# --overwrite_output_dir \
+# --predict_file_name dense-k50 \
+# --train_dense_retrieval \
+# --top_k_retrieval 50 \
+# --do_predict 
