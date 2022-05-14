@@ -142,6 +142,11 @@ def run_mrc(
         datasets["train"] = datasets_extra["train"]
         datasets["validation"] = datasets_extra["dev"]
 
+    # test code must be deleted
+    if data_args.is_using_augmented_dataset:
+        temp = load_from_disk(data_args.augmented_dataset_dir)
+        datasets["train"] = temp
+
     # dataset을 전처리합니다.
     # training과 evaluation에서 사용되는 전처리는 아주 조금 다른 형태를 가집니다.
     if training_args.do_train:
@@ -152,6 +157,48 @@ def run_mrc(
     question_column_name = "question" if "question" in column_names else column_names[0]
     context_column_name = "context" if "context" in column_names else column_names[1]
     answer_column_name = "answers" if "answers" in column_names else column_names[2]
+
+    def attach_title_at_context_back(dataset):
+        import pandas as pd
+        from datasets import Dataset
+        import pyarrow as pa
+
+        dataset = pd.DataFrame(dataset.to_dict())[:]
+        dataset['context'] = dataset['context']+' @'+dataset['title']+'@'
+        return Dataset(pa.Table.from_pandas(dataset))
+    
+    def attach_title_at_context_front(dataset):
+        import pandas as pd
+        from datasets import Dataset
+        import pyarrow as pa
+
+        dataset = pd.DataFrame(dataset.to_dict())[:]
+        dataset['context'] = '@'+dataset['title']+'@ '+ dataset['context']
+        
+        titles = dataset['title'].to_list()
+        answers = dataset['answers'].to_list()
+        new_answers = []
+
+        for i in range(len(titles)):
+            temp = answers[i]
+
+            temp['answer_start'][0] = temp['answer_start'][0] + 3 + len(titles[i])
+
+            new_answers.append(temp)
+        
+        dataset['answers'] = new_answers
+
+        return Dataset(pa.Table.from_pandas(dataset))
+
+    if data_args.is_using_title_attatchment:
+        if data_args.title_position == 'front':
+            datasets["train"] = attach_title_at_context_front(datasets["train"])
+            datasets["validation"] = attach_title_at_context_front(datasets["validation"])
+        elif data_args.title_position == 'back':
+            datasets["train"] = attach_title_at_context_back(datasets["train"])
+            datasets["validation"] = attach_title_at_context_back(datasets["validation"])
+        else:
+            print('title_attatchment is called but not excecuted, check if it is not intended')
 
     # Padding에 대한 옵션을 설정합니다.
     # (question|context) 혹은 (context|question)로 세팅 가능합니다.
@@ -200,7 +247,7 @@ def run_mrc(
             answers = examples[answer_column_name][sample_index]
 
             # answer가 없을 경우 cls_index를 answer로 설정합니다(== example에서 정답이 없는 경우 존재할 수 있음).
-            if len(answers["answer_start"]) == 0:
+            if len(answers["answer_start"]) == 0 or len(answers["text"][0]) == 0 : # modified for no_answer
                 tokenized_examples["start_positions"].append(cls_index)
                 tokenized_examples["end_positions"].append(cls_index)
             else:
@@ -244,6 +291,7 @@ def run_mrc(
         if "train" not in datasets:
             raise ValueError("--do_train requires a train dataset")
         train_dataset = datasets["train"]
+        # train_dataset = attach_title_at_context(train_dataset)
 
         # dataset에서 train feature를 생성합니다.
         train_dataset = train_dataset.map(
@@ -353,6 +401,7 @@ def run_mrc(
 
     if training_args.do_eval:
         eval_dataset = datasets["validation"]
+        # eval_dataset = attach_title_at_context(eval_dataset)
 
         # Validation Feature 생성
         eval_dataset = eval_dataset.map(

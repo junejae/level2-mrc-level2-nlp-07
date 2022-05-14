@@ -131,6 +131,27 @@ class DataTrainingArguments:
         default=False,
         metadata={"help": "whether to use bm25 (instead of tf-idf)."}
     )
+    is_using_augmented_dataset: bool = field(
+        default=False,
+        metadata={"help": "whether to train with augmented dataset"}
+    )
+    augmented_dataset_dir: str = field(
+        default="DataAug/train_with_no_answer",
+        metadata={"help": "declare directory of the augmented dataset"}
+    )
+    elastic: bool = field(
+        default=False,
+        metadata={"help": "whether to use elastic (instead of tf-idf)."}
+    )
+    is_using_title_attatchment: bool = field(
+        default=False,
+        metadata={"help": "whether to train with context mixed with title"}
+    )
+    title_position: str = field(
+        default="front",
+        metadata={"help": "declare title position"}
+    )
+    
 
 
 @dataclass
