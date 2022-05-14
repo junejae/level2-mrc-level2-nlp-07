@@ -1,0 +1,18 @@
+python retriever_test.py \
+--embedding_type "Dense" \
+--output_dir ./output \
+--max_seq_length 384 \
+--doc_stride 128 \
+--model_name_or_path "klue/roberta-base" \
+--per_device_train_batch_size 2 \
+--per_device_eval_batch_size 2 \
+--num_train_epochs 1 \
+--weight_decay 0.01 \
+--warmup_ratio 0.1 \
+--learning_rate 1e-3 \
+--eval_steps 500 \
+--save_total_limit 5 \
+--overwrite_cache \
+--project_name "[MRC] Dense" \
+--entity_name growing_sesame \
+--wandb_run_name "[hyunah] roberta-base dpr lr1e3"
