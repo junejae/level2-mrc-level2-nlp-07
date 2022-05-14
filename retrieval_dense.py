@@ -32,7 +32,7 @@ def timer(name):
 
 class DenseRetrieval:
 
-    def __init__(self, args, dataset, num_neg, 
+    def __init__(self, args, data_args, dataset, num_neg, 
                  tokenizer, p_encoder=None, q_encoder=None,
                  data_path: Optional[str] = "../data/",
                  context_path: Optional[str] = "wikipedia_documents.json",):
@@ -52,6 +52,7 @@ class DenseRetrieval:
         self.args = args
         self.dataset = dataset
         self.num_neg = num_neg
+        self.is_negative = data_args.is_negative_sampling
 
         self.tokenizer = tokenizer
         self.p_encoder = p_encoder
@@ -105,7 +106,8 @@ class DenseRetrieval:
 
     def train(self, args=None):
 
-        self.prepare_in_batch_negative(num_neg=self.num_neg)
+        if self.is_negative:
+            self.prepare_in_batch_negative(num_neg=self.num_neg)
 
         
         if args is None:
@@ -286,8 +288,8 @@ class DenseRetrieval:
                     p = self.tokenizer(p, padding="max_length", truncation=True, return_tensors='pt').to('cuda')
                     
                     p_inputs = {
-                        'input_ids': p['input_ids'].to(args.device),
-                        'attention_mask': p['attention_mask'].to(args.device)
+                        'input_ids': p['input_ids'].to(self.args.device),
+                        'attention_mask': p['attention_mask'].to(self.args.device)
                     }
                                         
                     p_emb = self.p_encoder(**p_inputs).to('cpu').numpy()

@@ -50,10 +50,12 @@ def main():
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments, TrainingArguments, WandbArguments)
     )
+    
+
     model_args, data_args, training_args, wandb_args = parser.parse_args_into_dataclasses()
 
-    # wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
-    # wandb.run.name = wandb_args.wandb_run_name
+    wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
+    wandb.run.name = wandb_args.wandb_run_name
 
     training_args.do_train = True
 
@@ -154,20 +156,17 @@ def run_dense_retrieval(
     model_args: ModelArguments,
     training_args: TrainingArguments,
     data_args: DataTrainingArguments,
-    wandb_args: WandbArguments,
     data_path: str = "../data",
     context_path: str = "wikipedia_documents.json",
 ) -> DatasetDict:
     
 
-    dataset = datasets['train'].remove_columns([col for col in datasets['train'].column_names if (col not in ['question', 'context'])])  # only keep the 'text' column
-    datasets_extra = datasets_extra['train'].remove_columns([col for col in datasets_extra['train'].column_names if (col not in ['question', 'context'])])
-
-
-    train_dataset = concatenate_datasets([dataset, datasets_extra])
+    train_dataset = datasets['train'].remove_columns([col for col in datasets['train'].column_names if (col not in ['question', 'context'])])  # only keep the 'text' column
     
+    print(training_args)
     retriever = DenseRetrieval(
         args=training_args, 
+        data_args=data_args,
         dataset=train_dataset, 
         num_neg=2, 
         tokenizer=tokenizer, 
@@ -178,7 +177,7 @@ def run_dense_retrieval(
     
     print("Done.")
 
-    df = retriever.retrieve(datasets['valid'], topk=data_args.top_k_retrieval)
+    df = retriever.retrieve(datasets['validation'], topk=data_args.top_k_retrieval)
 
 
     count = 0
