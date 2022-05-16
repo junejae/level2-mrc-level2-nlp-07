@@ -7,35 +7,22 @@ Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
 
 import logging
 import sys
-import pandas as pd
-from typing import Callable, Dict, List, NoReturn, Tuple
-import wandb
-import numpy as np
+from typing import Callable, List
 from arguments import DataTrainingArguments, ModelArguments, WandbArguments
 from datasets import (
-    Dataset,
     DatasetDict,
-    Features,
-    Sequence,
-    Value,
     load_from_disk,
     concatenate_datasets,
-    load_metric,
 )
-from retrieval import SparseRetrieval
+from retrieval_sparse import SparseRetrieval
 from retrieval_dense import *
 from transformers import (
-    AutoConfig,
-    AutoModelForQuestionAnswering,
     AutoTokenizer,
-    DataCollatorWithPadding,
-    EvalPrediction,
     HfArgumentParser,
     TrainingArguments,
     set_seed,
 )
-from bm25 import bm25_func
-from elasticsearch_retriever import elastic_func
+from retrieval_sparse import bm25_func, elastic_func
 from utils_qa import check_no_error, postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)

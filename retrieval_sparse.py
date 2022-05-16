@@ -11,6 +11,8 @@ import pandas as pd
 from datasets import Dataset, concatenate_datasets, load_from_disk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm.auto import tqdm
+from rank_bm25 import BM25Plus
+from elasticsearch import Elasticsearch
 
 
 @contextmanager
@@ -439,3 +441,117 @@ if __name__ == "__main__":
 
         with timer("single query by exhaustive search"):
             scores, indices = retriever.retrieve(query)
+
+
+
+def bm25_func(datasets: Dataset, topk: Optional[int] = 1):
+    path = "../data/wikipedia_documents.json"
+    with open(path, "r", encoding="utf-8") as f:
+            wiki = json.load(f)
+    contexts = list(
+        dict.fromkeys([v["text"] for v in wiki.values()])
+    )
+    print(f"Lengths of unique contexts : {len(contexts)}")
+    tokenized_context = [doc.split(" ") for doc in contexts]
+    bm25 = BM25Plus(tokenized_context)
+
+    pred = []
+    for i in tqdm(range(len(datasets['question']))):
+        query = datasets['question'][i].split(" ")
+        top_k = bm25.get_top_n(query, contexts, n=topk)
+        pred.append(top_k)
+
+    total = []
+    for idx, example in enumerate(
+        tqdm(datasets, desc="BM25 retrieval: ")
+    ):
+        tmp = {
+            # Query와 해당 id를 반환합니다.
+            "question": example["question"],
+            "id": example["id"],
+            # Retrieve한 Passage의 context를 반환합니다.
+            "context": " ".join(pred[idx]),
+        }
+        if "context" in example.keys() and "answers" in example.keys():
+            # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
+            tmp["original_context"] = example["context"]
+            tmp["answers"] = example["answers"]
+        total.append(tmp)
+
+    cqas = pd.DataFrame(total)
+    return cqas
+
+
+
+
+def elastic_func(datasets: Dataset, topk: Optional[int] = 1):
+    try:
+        es.transport.close()
+    except:
+        pass
+    es = Elasticsearch(timeout=30)
+
+    INDEX_NAME = "wiki"
+    index_config = {
+    "settings": {
+        "analysis": {
+            "analyzer": {
+                "my_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "nori_tokenizer",
+                    "decompound_mode": "mixed",
+                    "filter": ["shingle"]
+                }
+            },    
+        }
+    },
+    "mappings": {
+        "dynamic": "strict",
+        "properties": {
+            "document_text": {"type": "text", "analyzer": "my_analyzer"}
+        }    
+    }
+    }
+
+    path = "/opt/ml/input/data/wikipedia_documents.json"
+    with open(path, "r") as f:
+        wiki = json.load(f)
+
+
+    if es.indices.exists(INDEX_NAME):
+        es.indices.delete(index=INDEX_NAME)
+    es.indices.create(index=INDEX_NAME, body=index_config)
+
+
+    for doc_id, doc in tqdm(wiki.items(), total=len(wiki)):
+        temp_d = {}
+        temp_d['document_text'] = doc['text']
+        es.index(index=INDEX_NAME, id=doc_id, body=temp_d)
+
+    query = datasets["question"]
+    ids = datasets["id"]
+    context = datasets["context"] if "context" in datasets.column_names else []
+    answer = datasets["answers"] if "answers" in datasets.column_names else []
+
+    total = []
+    for i, (q, idx) in enumerate(tqdm(zip(query, ids), desc="Elastic search: ", total=len(query))):
+        q = q.replace("~", "-")
+        q = q.replace("/", "")
+        res = es.search(index=INDEX_NAME, q=q, size=topk)  # topk개의 문서를 반환합니다
+        
+        total_context = [res["hits"]["hits"][j]["_source"]["document_text"] for j in range(topk)]
+        tmp = {
+            # Query와 해당 id를 반환합니다.
+            "question": q,
+            "id": idx,
+            # Retrieve한 Passage의 context를 반환합니다.
+            "context": " ".join(total_context),
+        }
+        if context and answer:
+            # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
+            tmp["original_context"] = context[i]
+            tmp["answers"] = answer[i]
+        total.append(tmp)    
+
+    cqas = pd.DataFrame(total)
+    return cqas

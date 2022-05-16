@@ -19,7 +19,7 @@ from datasets import (
     load_from_disk,
     load_metric,
 )
-from retrieval import SparseRetrieval
+from retrieval_sparse import SparseRetrieval
 from trainer_qa import QuestionAnsweringTrainerWithRetriever
 from transformers import (
     AutoConfig,
@@ -32,8 +32,7 @@ from transformers import (
     set_seed,
 )
 from utils_qa import check_no_error, postprocess_qa_predictions
-from bm25 import bm25_func
-from elasticsearch_retriever import elastic_func
+from retrieval_sparse import bm25_func, elastic_func
 
 logger = logging.getLogger(__name__)
 
