@@ -21,6 +21,8 @@ from datasets import (
     load_from_disk,
     concatenate_datasets,
     load_metric,
+    load_dataset, 
+    concatenate_datasets
 )
 from retrieval import SparseRetrieval
 from retrieval_dense import *
@@ -48,10 +50,12 @@ def main():
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments, TrainingArguments, WandbArguments)
     )
+    
+
     model_args, data_args, training_args, wandb_args = parser.parse_args_into_dataclasses()
 
-    # wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
-    # wandb.run.name = wandb_args.wandb_run_name
+    wandb.init(project=wandb_args.project_name, entity=wandb_args.entity_name)
+    wandb.run.name = wandb_args.wandb_run_name
 
     training_args.do_train = True
 
@@ -71,7 +75,8 @@ def main():
     set_seed(training_args.seed)
 
     datasets = load_from_disk(data_args.dataset_name)
-    print(datasets)
+    datasets_extra = load_dataset(data_args.other_dataset_name, data_args.other_dataset_ver)
+
 
     # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
     # argument로 원하는 모델 이름을 설정하면 옵션을 바꿀 수 있습니다.
@@ -88,7 +93,12 @@ def main():
     )
     else: # "Dense"
         datasets = run_dense_retrieval(
-            tokenizer, datasets, training_args, model_args, data_args,
+            tokenizer=tokenizer, 
+            datasets=datasets, 
+            datasets_extra=datasets_extra, 
+            model_args=model_args,
+            training_args=training_args, 
+            data_args=data_args, 
         )
 
 
@@ -142,41 +152,44 @@ def run_sparse_retrieval(
 def run_dense_retrieval(
     tokenizer: AutoTokenizer,
     datasets: DatasetDict,
+    datasets_extra: DatasetDict,
     model_args: ModelArguments,
+    training_args: TrainingArguments,
     data_args: DataTrainingArguments,
     data_path: str = "../data",
     context_path: str = "wikipedia_documents.json",
 ) -> DatasetDict:
+    
 
-    args = TrainingArguments(
-        output_dir="dense_retireval",
-        evaluation_strategy="epoch",
-        learning_rate=3e-4,
-        per_device_train_batch_size=2,
-        per_device_eval_batch_size=2,
-        num_train_epochs=2,
-        weight_decay=0.01
+    train_dataset = datasets['train'].remove_columns([col for col in datasets['train'].column_names if (col not in ['question', 'context'])])  # only keep the 'text' column
+    
+    print(training_args)
+    retriever = DenseRetrieval(
+        args=training_args, 
+        data_args=data_args,
+        dataset=train_dataset, 
+        num_neg=2, 
+        tokenizer=tokenizer, 
+        data_path=data_path, 
+        context_path=context_path
     )
-
-    train_dataset = datasets['train']
-    retriever = DenseRetrieval(args=args, dataset=train_dataset, num_neg=2, tokenizer=tokenizer)
-    retriever.get_dense_embedding()
+    retriever.get_dense_embedding(model_args=model_args)
     
     print("Done.")
 
-    # print(datasets)
-    # df = retriever.retrieve(datasets, topk=data_args.top_k_retrieval)
-
-    # count = 0
-    # for i in range(len(df)):
-    #     ground = df['original_context'][i]
-    #     context = df['context'][i]
-
-    #     if ground in context:
-    #         count += 1
+    df = retriever.retrieve(datasets['validation'], topk=data_args.top_k_retrieval)
 
 
-    # print("Accuracy: ", count / len(df))
+    count = 0
+    for i in range(len(df)):
+        ground = df['original_context'][i]
+        context = df['context'][i]
+
+        if ground in context:
+            count += 1
+
+
+    print("Accuracy: ", count / len(df))
 
 
 if __name__ == "__main__":
