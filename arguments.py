@@ -115,6 +115,12 @@ class DataTrainingArguments:
     )
     is_using_ex_dataset: bool = field(
         default=False,
+    ),
+    is_negative_sampling: bool = field(
+        default=True,
+    )
+    is_elastic: bool = field(
+        default=True,
         metadata={"help": "whether to train different datasets."}
     )
     is_multiple_training: bool = field(
@@ -154,11 +160,11 @@ class WandbArguments:
     Arguments related to wandb.
     """
     project_name: str = field(
-        default="[MRC] baseline" ,
+        default="[MRC] dense embedding" ,
     )
     entity_name: Optional[str] = field(
         default="growing_sesame",
     )
     wandb_run_name: Optional[str] = field(
-        default="robert-large standard",
+        default="eval test",
     )
