@@ -265,3 +265,63 @@
 - [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks(2020)]([https://arxiv.org/pdf/2005.11401v4.pdf](https://arxiv.org/pdf/2005.11401v4.pdf))
 - [RoBERTa: A Robustly Optimized BERT Pretraining Approach(2019)]([https://arxiv.org/abs/1907.11692](https://arxiv.org/abs/1907.11692))
 - [Elastic Search](https://github.com/thejungwon/search-engine-tutorial)
+
+---
+
+# 개인 회고
+
+## 1️⃣김준재
+
+### 🧭개인 학습 목표
+
+- 퀄리티 있는 한글 text data augmentation 조사 & 적용
+- 쉘스크립트 응용을 통한 대규모 실험 자동화
+- VScode의 git 관리 툴과, master-feature branch 구조를 활용한 코드 버전 관리
+- 공식문서를 다독하며 Huggingface 기반 코드를 커스터마이징 하기
+
+### 📖사용한 지식 & 기술
+
+- Pre-trained LM: KLUE/RoBERTa-Large, XLM-RoBERTa-Large
+- Loss Function: Cross-Entropy, {(Start + End) / 2}
+- Transfer Learning 기법: Fine-Tuning, TAPT(using KorQuAD 1.0 dataset)
+- 데이터 전처리: Wikipedia 데이터셋의 중복 제거, title을 context 앞에 붙이기
+- Augmentation: Pororo를 활용한 기존 데이터셋의 질문문 Paraphrasing, 답을 유추할 수 없는 context를 붙여주기
+- Metric: EM(Exact Match), F1 Score
+- Hyperparameter Tuning: batch size, epoch, learning rate, weight decay
+- ETC: Eval_loss 개별 도입, Progressive Input Resizing
+
+### 🧑🏻‍🎓결과 ⇒ 깨달음
+
+- 우수한 성능의 Retriever만 달아줘도 리더보드 점수가 대폭 상승했다.
+    - Reader에 사용된 모델은 Retriever가 올바른 context를 붙여줄 경우만을 상정하여 학습하였기 때문에, Retriever의 context 검색 정확도가 곧 전체 시스템 성능 향상에 직결됐다.
+- Reader를 훈련시킬 양질의 데이터량이 부족하여, KLUE 데이터에 기본적으로 대응이 잘 되는 KLUE의 모델만이 압도적인 성능을 보여주었다.
+    - 학습 데이터의 절대량과 퀄리티가 현대 딥러닝의 핵심임을 다시금 깨달았다.
+
+### 🛠️새롭게 시도한 변화 ⇒ 효과
+
+- 대회 초기에 Eval_loss가 베이스라인 코드에서 빠져있음을 발견하여, Hugging Face 공식 문서를 보며 QA model의 loss 계산 코드를 모방하여 Eval_loss 계산 기능을 추가하였다.
+    - 실험의 신뢰성을 추가적으로 확보할 수 있었고, 동료들과의 논리적인 커뮤니케이션에도 도움이 되었다.
+- 팀원들끼리 서로 다른 branch를 관리하며, 새로운 기능을 적용했을때 1~2일 내로 master 브렌치에 병합한 뒤 전 팀원이 그 코드를 업데이트 하였다.
+    - 큰 버그 없이 신속하게 팀 전체의 코드를 업데이트 해 나가며 체계적으로 발전할 수 있었다.
+- arrow 기반인 데이터셋을 분석하며, 이를 통해 data augmentation을 수행하였다.
+    - 처음엔 arrow만의 규칙에 적응하기 힘들었으나, 며칠간의 적응 이후론 오히려 csv보다 간편한 사용감을 느낄 수 있었다.
+- 쉘 스크립트의 순차적 코드 실행 기능을 이용하여 새벽 시간대에 여러 실험을 돌려놓았다.
+    - 매 실험이 끝날 때마다 argument를 변경해 가며 코드를 다시 돌릴 필요가 없어, 삶이 매우 윤택해졌다.
+
+### 🏗️실수 & 한계 ⇒ 개선 방안
+
+- arrow 기반인 데이터셋이 처음에 너무 생소하게 다가와서 EDA를 너무 뒤늦게 시작하였다.
+    - 처음 보는 두려운 무언가라도 우선 건드리며 실컷 깨지고 보는 것이 성장의 지름길임을 숙지하기로 했다.
+- 대회 막바지에 시간이 없어 Kaggle의 솔루션과 유명 논문에서 본 솔루션 중 하나만을 실험할 수 있었는데, 실전 지향이란 이유로 Kaggle의 것을 선택했으나 실패했다. 나중에 다른 팀의 캠퍼와의 교류를 통해 논문쪽이 확실히 성과가 있었음을 확인했다.
+    - 막연한 경험적 기대보단 확실한 성과가 보증된 유명 논문 쪽을 우선시 하는 습관을 들이기로 했다.
+- 코드 충돌이나 버그에 대한 두려움이 커서 완전히 새로운 코드를 짜지 않고 베이스라인 코드에서 살만 붙이는 방식으로 개발을 하였다.
+    - 팀 코딩 컨벤션을 더욱 강화하여 안전장치를 견고히 만들어서, 새로운 코드를 짜는 모험을 해도 괜찮을 것이란 심리적 안정감을 마련하기로 했다.
+
+### 🆕다음 프로젝트에서 새롭게 시도해볼 것들
+
+- Hugging Face Dataset을 충분히 활용하기
+- 즉각적인 개인 실험 기록 관리
+- git의 rebase 기능을 활용한 업데이트 로그 가시성 확보
+- 논문에 근거한 추론
+
+---
